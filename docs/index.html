@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>whycant — find the folder that says no</title>
+<meta name="description" content="whycant is a Linux command-line tool that explains “Permission denied”: which folder blocks access, why, and the safest fix.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1B1F2A;
+    --paper: #F6F7F4;
+    --rule: #D9DCD4;
+    --steel: #5F6673;
+    --allow: #2F7D4F;
+    --deny: #C2362B;
+    --stop: #B7791F;
+    --code-bg: #1B1F2A;
+    --code-fg: #E8EAE3;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 400 1.0625rem/1.6 var(--sans);
+  }
+  a { color: var(--ink); text-underline-offset: 3px; }
+  a:hover { color: var(--allow); }
+  :focus-visible { outline: 3px solid var(--stop); outline-offset: 3px; border-radius: 2px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  .prose { max-width: 66ch; }
+
+  /* Header */
+  header.site { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 0; }
+  .mark { font: 700 1.25rem var(--mono); text-decoration: none; letter-spacing: -0.01em; }
+  .mark span { color: var(--deny); }
+  nav.site { display: flex; gap: 20px; align-items: center; font-size: 0.95rem; }
+  .btn {
+    display: inline-block; font: 600 0.95rem var(--sans); text-decoration: none;
+    background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 6px;
+  }
+  .btn:hover { background: var(--allow); color: #fff; }
+
+  /* Hero */
+  .hero { padding: 48px 0 56px; }
+  .hero h1 { font: 600 clamp(2.1rem, 4.6vw, 3.4rem)/1.1 var(--sans); letter-spacing: -0.02em; margin: 0 0 14px; max-width: 18ch; }
+  .lede { font-size: 1.2rem; color: var(--steel); margin: 0 0 40px; max-width: 54ch; }
+
+  .demo { border-top: 2px solid var(--ink); padding-top: 22px; }
+  .demo-cmd { font: 500 0.95rem var(--mono); color: var(--steel); margin: 0 0 18px; }
+  .who { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 26px; border: 0; padding: 0; }
+  .who legend { font-weight: 600; margin-right: 6px; float: left; padding: 6px 0; }
+  .who label { cursor: pointer; }
+  .who input { position: absolute; opacity: 0; pointer-events: none; }
+  .who span {
+    display: inline-block; font: 500 0.95rem var(--mono); padding: 6px 12px;
+    border: 1.5px solid var(--rule); border-radius: 999px; background: #fff;
+  }
+  .who input:checked + span { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+  .who input:focus-visible + span { outline: 3px solid var(--stop); outline-offset: 2px; }
+
+  /* The path as a staircase: one folder per step, deeper as you go */
+  .path { list-style: none; margin: 0; padding: 0; font-family: var(--mono); border-top: 1px solid var(--rule); }
+  .step { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; gap: 6px 22px;
+          padding: 8px 0; border-bottom: 1px solid var(--rule); }
+  .step .name { font-weight: 700; font-size: clamp(1.35rem, 3.4vw, 2.3rem); line-height: 1.15; letter-spacing: -0.02em;
+                padding-left: calc(var(--depth) * clamp(0.9rem, 2.6vw, 2rem)); overflow-wrap: anywhere; }
+  .step .meta { font-size: 0.85rem; color: var(--steel); white-space: nowrap; }
+  .step .state { font: 600 0.85rem var(--sans); min-width: 6.5em; text-align: right; }
+  .step.ok .state { color: var(--allow); }
+  .step.deny .name, .step.deny .state, .step.deny .meta { color: var(--deny); }
+  .step.deny { background: #FBEDEB; }
+  .step.unreached { opacity: 0.32; }
+
+  .verdict { margin-top: 26px; display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; max-width: 78ch; }
+  .verdict dt { font: 700 0.95rem var(--mono); padding-top: 2px; }
+  .verdict dd { margin: 0; }
+  .verdict .v-ok { color: var(--allow); }
+  .verdict .v-deny { color: var(--deny); }
+  .verdict code { font: 500 0.95rem var(--mono); background: #fff; border: 1px solid var(--rule); padding: 2px 6px; border-radius: 4px; }
+  .demo-note { font-size: 0.9rem; color: var(--steel); margin-top: 22px; }
+
+  code { font-family: var(--mono); font-size: 0.92em; }
+  p code, li code, td code { background: #fff; border: 1px solid var(--rule); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  pre code { background: none; border: 0; padding: 0; color: inherit; font-size: inherit; overflow-wrap: normal; }
+
+  /* Sections */
+  section.block { padding: 56px 0; border-top: 1px solid var(--rule); }
+  h2 { font: 600 1.75rem/1.2 var(--sans); letter-spacing: -0.01em; margin: 0 0 12px; }
+  h3 { font: 600 1.1rem/1.3 var(--sans); margin: 0 0 6px; }
+  p { margin: 0 0 14px; }
+
+  /* Annotated output */
+  .annotated { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 28px; margin-top: 26px; align-items: start; }
+  pre.term {
+    margin: 0; background: var(--code-bg); color: var(--code-fg); border-radius: 8px;
+    padding: 20px 22px; overflow-x: auto; font: 400 0.9rem/1.6 var(--mono);
+  }
+  .term .g { color: #7BD39A; } .term .r { color: #F08A80; } .term .a { color: #F2C66D; } .term .d { color: #8B93A1; } .term .w { color: #fff; font-weight: 500; }
+  .notes { list-style: none; margin: 0; padding: 0; }
+  .notes li { padding: 0 0 18px 16px; border-left: 3px solid var(--rule); margin-bottom: 14px; }
+  .notes li.where { border-left-color: var(--deny); }
+  .notes li.why { border-left-color: var(--stop); }
+  .notes li.fix { border-left-color: var(--allow); }
+
+  /* Install steps: a real sequence */
+  ol.steps { list-style: none; counter-reset: s; margin: 26px 0 0; padding: 0; display: grid; gap: 22px; }
+  ol.steps > li { counter-increment: s; display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); gap: 14px; }
+  ol.steps > li::before {
+    content: counter(s); font: 700 1rem var(--mono); width: 2.2rem; height: 2.2rem; border-radius: 50%;
+    border: 2px solid var(--ink); display: grid; place-items: center;
+  }
+  .codebox { position: relative; margin-top: 8px; }
+  .codebox pre { margin: 0; background: var(--code-bg); color: var(--code-fg); border-radius: 8px; padding: 14px 92px 14px 18px; overflow-x: auto; font: 400 0.9rem/1.6 var(--mono); }
+  .copy {
+    position: absolute; top: 8px; right: 8px; font: 600 0.8rem var(--sans); cursor: pointer;
+    background: #2C3242; color: var(--code-fg); border: 1px solid #3A4154; border-radius: 5px; padding: 6px 10px;
+  }
+  .copy:hover { background: #3A4154; }
+
+  /* Usage table */
+  table.usage { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 1rem; }
+  .usage th { text-align: left; font-weight: 600; padding: 10px 12px; border-bottom: 2px solid var(--ink); }
+  .usage td { padding: 10px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .usage td:first-child { font: 500 0.92rem var(--mono); white-space: nowrap; }
+  .table-scroll { overflow-x: auto; }
+
+  /* Guards */
+  .guards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 26px; border-top: 2px solid var(--ink); }
+  .guard { padding: 20px 20px 4px 0; }
+  .guard + .guard { padding-left: 20px; border-left: 1px solid var(--rule); }
+  .guard .tag { font: 700 0.85rem var(--mono); color: var(--stop); margin-bottom: 8px; display: block; }
+
+  /* Decision rules: an ordered sequence */
+  ol.rules { margin: 22px 0 0; padding-left: 1.4rem; max-width: 66ch; }
+  ol.rules li { padding-left: 6px; margin-bottom: 10px; }
+  ol.rules li::marker { font: 700 1rem var(--mono); }
+  .callout { margin-top: 22px; padding: 16px 18px; background: #fff; border: 1px solid var(--rule); border-left: 4px solid var(--stop); border-radius: 4px; max-width: 66ch; }
+
+  footer.site { padding: 36px 0 48px; border-top: 1px solid var(--rule); color: var(--steel); font-size: 0.95rem; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+
+  @media (max-width: 760px) {
+    nav.site a:not(.btn) { display: none; }
+    .annotated { grid-template-columns: minmax(0, 1fr); }
+    .guards { grid-template-columns: minmax(0, 1fr); }
+    .guard + .guard { padding-left: 0; border-left: 0; border-top: 1px solid var(--rule); }
+    .step { grid-template-columns: minmax(0, 1fr) auto; }
+    .step .meta { grid-column: 1; grid-row: 2; padding-left: calc(var(--depth) * 0.9rem); }
+    .step .state { grid-column: 2; grid-row: 1; }
+    .verdict { grid-template-columns: 1fr; gap: 2px; }
+    .verdict dd { margin-bottom: 10px; }
+    .usage td:first-child { white-space: normal; overflow-wrap: anywhere; }
+    .usage th, .usage td { padding: 10px 8px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .step { transition: opacity .25s ease, background-color .25s ease; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <a class="mark" href="./">why<span>cant</span></a>
+    <nav class="site" aria-label="Main">
+      <a href="#install">Install</a>
+      <a href="#usage">Usage</a>
+      <a href="https://github.com/Hennashakil/whycant">Source on GitHub</a>
+      <a class="btn" href="https://github.com/Hennashakil/whycant/releases/latest">Download v1.0</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <h1 id="hero-title">Find the exact folder that says no.</h1>
+      <p class="lede">“Permission denied” tells you access failed. whycant walks the path the way Linux does and shows where it stops, why, and the narrowest fix.</p>
+
+      <div class="demo">
+        <p class="demo-cmd" id="demo-cmd">$ whycant -u bob /srv/web/team/report.txt</p>
+        <fieldset class="who">
+          <legend>Check as</legend>
+          <label><input type="radio" name="who" value="bob" checked><span>bob</span></label>
+          <label><input type="radio" name="who" value="carol"><span>carol</span></label>
+          <label><input type="radio" name="who" value="alice"><span>alice</span></label>
+          <label><input type="radio" name="who" value="root"><span>root</span></label>
+        </fieldset>
+
+        <ol class="path" id="path" aria-hidden="true"></ol>
+        <dl class="verdict" id="verdict" aria-live="polite"></dl>
+        <p class="demo-note">A sample folder for this demo. carol is in group devs; alice owns report.txt but its owner bits are empty.</p>
+      </div>
+    </section>
+
+    <section class="block" aria-labelledby="what-title">
+      <h2 id="what-title">What it tells you</h2>
+      <p class="prose">Real output from whycant. Every run answers the same three questions.</p>
+      <div class="annotated">
+<pre class="term" tabindex="0" aria-label="Example output of whycant"><span class="w">$ whycant -u bob team/f</span>
+Can bob (uid 30033) read team/f?
+
+  <span class="g">[ ok ]</span>  drwxr-xr-x  root:root  /srv/wtest
+  <span class="r">[DENY]</span>  drwxr-x---  root:devs  /srv/wtest/team
+
+  <span class="a">Why:</span> bob is not the owner and not in group devs,
+       so the 'other' bits apply, and they lack x.
+
+  Narrowest fix first:
+    1) setfacl -m u:bob:x /srv/wtest/team
+       <span class="d"># only this user</span>
+    2) usermod -aG devs bob
+       <span class="d"># every member of the group</span>
+    3) chmod o+x /srv/wtest/team
+       <span class="d"># every user on the system</span>
+  Avoid chmod 777 and chmod -R.
+
+  <span class="r">=&gt; Denied.</span></pre>
+        <ul class="notes">
+          <li class="where"><h3>Where</h3>Each folder on the path gets a line. The first <code>[DENY]</code> is the one blocking access.</li>
+          <li class="why"><h3>Why</h3>Which rule Linux applied: owner, group or everyone else, and which bit is missing.</li>
+          <li class="fix"><h3>Fix</h3>Ranked from one user to everyone. It never suggests <code>chmod 777</code>.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="block" id="install" aria-labelledby="install-title">
+      <h2 id="install-title">Install</h2>
+      <p class="prose">For Linux on x86_64. The checksum step proves the file you downloaded is the one that was published.</p>
+      <ol class="steps">
+        <li><div><h3>Download the program and its checksum</h3>
+          <div class="codebox"><pre><code>wget https://github.com/Hennashakil/whycant/releases/download/v1.0/whycant-linux-x86_64 \
+     https://github.com/Hennashakil/whycant/releases/download/v1.0/SHA256SUMS</code></pre><button class="copy" type="button">Copy</button></div></div></li>
+        <li><div><h3>Verify it</h3>
+          <p>You should see <code>whycant-linux-x86_64: OK</code>. If it says <code>FAILED</code>, delete the file and don’t run it.</p>
+          <div class="codebox"><pre><code>sha256sum -c SHA256SUMS</code></pre><button class="copy" type="button">Copy</button></div></div></li>
+        <li><div><h3>Install it</h3>
+          <div class="codebox"><pre><code>chmod +x whycant-linux-x86_64
+sudo mv whycant-linux-x86_64 /usr/local/bin/whycant
+whycant --version</code></pre><button class="copy" type="button">Copy</button></div></div></li>
+      </ol>
+      <p class="prose" style="margin-top:22px">Prefer to build it yourself? <code>git clone https://github.com/Hennashakil/whycant.git && cd whycant && make && sudo make install</code></p>
+    </section>
+
+    <section class="block" id="usage" aria-labelledby="usage-title">
+      <h2 id="usage-title">Usage</h2>
+      <p class="prose"><code>whycant [OPTION] [PATH]</code>. Both are optional: with no path, it checks the folder you are in.</p>
+      <div class="table-scroll">
+        <table class="usage">
+          <thead><tr><th scope="col">Command</th><th scope="col">Question it answers</th></tr></thead>
+          <tbody>
+            <tr><td>whycant</td><td>Can I read the folder I am in?</td></tr>
+            <tr><td>whycant /etc/hosts</td><td>Can I read this file?</td></tr>
+            <tr><td>whycant -w notes.txt</td><td>Can I edit it?</td></tr>
+            <tr><td>whycant -x ./backup.sh</td><td>Can I run it?</td></tr>
+            <tr><td>whycant -c /opt/myapp</td><td>Can I create it here?</td></tr>
+            <tr><td>sudo whycant -u www-data /var/www/html</td><td>Can another user reach it?</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="prose" style="margin-top:18px">Exit codes: <code>0</code> allowed, <code>1</code> denied, <code>2</code> error, so scripts can act on the result.</p>
+    </section>
+
+    <section class="block" aria-labelledby="safety-title">
+      <h2 id="safety-title">Built to give safe advice</h2>
+      <p class="prose">whycant only reads. It never changes a file, and some locks it will not help you open.</p>
+      <div class="guards">
+        <div class="guard"><span class="tag">Stop</span><h3>Protected files</h3><p>Password, key and admin files such as <code>/etc/shadow</code>, sudoers, SSH keys and <code>/root</code> get a stop instead of a fix.</p></div>
+        <div class="guard"><span class="tag">Stop</span><h3>Root-level groups</h3><p>It never suggests joining <code>docker</code>, <code>disk</code>, <code>sudo</code> or similar groups, where membership is as good as root. Raw disks are blocked too.</p></div>
+        <div class="guard"><span class="tag">sudo</span><h3>Root only when needed</h3><p>It runs as you. If it can’t see further, it prints the exact <code>sudo</code> command, and under sudo it still checks for you, not for root.</p></div>
+      </div>
+    </section>
+
+    <section class="block" aria-labelledby="rules-title">
+      <h2 id="rules-title">How Linux decides</h2>
+      <p class="prose">Every folder on the way needs <code>x</code>, permission to pass through. At the end, you need what you asked for: <code>r</code>, <code>w</code> or <code>x</code>. At each step Linux asks four questions, in order, and the first match wins:</p>
+      <ol class="rules">
+        <li>Is the user root? Then allowed, except running a file with no <code>x</code> bit.</li>
+        <li>Does the user own it? Then only the owner bits count.</li>
+        <li>Is the user in its group? Then only the group bits count.</li>
+        <li>Otherwise, the bits for everyone else count.</li>
+      </ol>
+      <p class="callout">Rule 2 surprises people: if you own a file but the owner bits are empty, Linux never falls back to the group bits. Try <b>alice</b> in the demo above.</p>
+    </section>
+  </main>
+
+  <footer class="site">
+    <span>whycant is MIT licensed. Made by <a href="https://github.com/Hennashakil">Henna Shakil</a>.</span>
+    <a href="https://github.com/Hennashakil/whycant">github.com/Hennashakil/whycant</a>
+  </footer>
+</div>
+
+<script>
+(function () {
+  // A sample tree for the demo. Rules match whycant's evaluate().
+  var tree = [
+    { name: "",           mode: "drwxr-xr-x", owner: "root",  group: "root" },
+    { name: "srv",        mode: "drwxr-xr-x", owner: "root",  group: "root" },
+    { name: "web",        mode: "drwxr-xr-x", owner: "root",  group: "root" },
+    { name: "team",       mode: "drwxr-x---", owner: "root",  group: "devs" },
+    { name: "report.txt", mode: "----r-----", owner: "alice", group: "devs" }
+  ];
+  var users = {
+    bob:   { groups: ["bob"] },
+    carol: { groups: ["carol", "devs"] },
+    alice: { groups: ["alice", "devs"] },
+    root:  { groups: ["root"] }
+  };
+
+  function classOf(user, node) {
+    if (user === "root") return "root";
+    if (node.owner === user) return "owner";
+    if (users[user].groups.indexOf(node.group) !== -1) return "group";
+    return "other";
+  }
+  function bitsFor(cls, mode) {
+    if (cls === "owner") return mode.slice(1, 4);
+    if (cls === "group") return mode.slice(4, 7);
+    return mode.slice(7, 10);
+  }
+  function pathTo(i) {
+    var p = tree.slice(1, i + 1).map(function (n) { return n.name; }).join("/");
+    return "/" + p;
+  }
+  function esc(s) { return s.replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  function run(user) {
+    var steps = [], blocked = -1, last = tree.length - 1;
+    for (var i = 0; i < tree.length; i++) {
+      var node = tree[i], need = i === last ? "r" : "x", cls = classOf(user, node);
+      var have = cls === "root" ? "rwx" : bitsFor(cls, node.mode);
+      var ok = cls === "root" || have.indexOf(need) !== -1;
+      steps.push({ node: node, need: need, cls: cls, have: have, ok: ok });
+      if (!ok) { blocked = i; break; }
+    }
+    return { steps: steps, blocked: blocked };
+  }
+
+  var pathEl = document.getElementById("path");
+  var verdictEl = document.getElementById("verdict");
+  var cmdEl = document.getElementById("demo-cmd");
+
+  function render(user) {
+    var r = run(user);
+    cmdEl.textContent = "$ whycant -u " + user + " /srv/web/team/report.txt";
+    var html = "";
+    tree.forEach(function (node, i) {
+      var st = r.steps[i], state = !st ? "unreached" : st.ok ? "ok" : "deny";
+      var word = !st ? "not reached" : st.ok ? (i === tree.length - 1 ? "can read" : "passes") : "stops here";
+      var label = i === 0 ? "/" : node.name + (i < tree.length - 1 ? "/" : "");
+      html += '<li class="step ' + state + '" style="--depth:' + i + '"><span class="name">' + esc(label) +
+        '</span><span class="meta">' + esc(node.mode + "  " + node.owner + ":" + node.group) +
+        '</span><span class="state">' + word + "</span></li>";
+    });
+    pathEl.innerHTML = html;
+
+    var d = "";
+    if (r.blocked === -1) {
+      var why = user === "root" ? "root ignores the mode bits for reading." :
+        user + " is in group devs, so the group bits apply, and they include r.";
+      d += '<dt class="v-ok">Allowed</dt><dd>' + esc(user) + " can read report.txt: " + esc(why) + "</dd>";
+    } else {
+      var s = r.steps[r.blocked], where = pathTo(r.blocked), what = s.need === "x" ? "pass through" : "read";
+      var reason;
+      if (s.cls === "owner") reason = user + " owns it, and the owner bits are empty. The owner never falls back to the group bits.";
+      else if (s.cls === "group") reason = user + " is in group " + s.node.group + ", and the group bits lack " + s.need + ".";
+      else reason = user + " is not the owner and not in group " + s.node.group + ", so the 'other' bits apply, and they lack " + s.need + ".";
+      var fix = s.cls === "owner" ? "chmod u+" + s.need + " " + where : "setfacl -m u:" + user + ":" + s.need + " " + where;
+      d += '<dt class="v-deny">Denied</dt><dd>' + esc(user) + " cannot " + what + " <code>" + esc(where) + "</code></dd>";
+      d += "<dt>Why</dt><dd>" + esc(reason) + "</dd>";
+      d += "<dt>Fix</dt><dd><code>" + esc(fix) + "</code></dd>";
+    }
+    verdictEl.innerHTML = d;
+  }
+
+  document.querySelectorAll('input[name="who"]').forEach(function (el) {
+    el.addEventListener("change", function () { if (el.checked) render(el.value); });
+  });
+  render("bob");
+
+  document.querySelectorAll(".copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var text = btn.previousElementSibling.innerText;
+      function done(msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = "Copy"; }, 1600); }
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(function () { done("Copied"); }, function () { done("Select and copy"); });
+      } else { done("Select and copy"); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
