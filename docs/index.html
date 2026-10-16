@@ -5,6 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>whycant — find the folder that says no</title>
 <meta name="description" content="whycant is a Linux command-line tool that explains “Permission denied”: which folder blocks access, why, and the safest fix.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F6F7F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161A22" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://hennashakil.github.io/whycant/">
+
+<!-- Link preview card (WhatsApp, LinkedIn, X, Slack) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="whycant">
+<meta property="og:title" content="whycant — find the folder that says no">
+<meta property="og:description" content="A Linux tool that explains “Permission denied”: where it fails, why, and the safest fix. Try the live demo.">
+<meta property="og:url" content="https://hennashakil.github.io/whycant/">
+<meta property="og:image" content="https://hennashakil.github.io/whycant/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="whycant: a path drawn as steps, stopping in red at the folder that blocks access">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231B1F2A'/%3E%3Cpath d='M19.5 6 12.5 22' stroke='%23F6F7F4' stroke-width='3.2' stroke-linecap='round'/%3E%3Crect x='8' y='24.5' width='16' height='3' rx='1.5' fill='%23E5574A'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
@@ -12,38 +30,55 @@
   :root {
     --ink: #1B1F2A;
     --paper: #F6F7F4;
+    --surface: #FFFFFF;
     --rule: #D9DCD4;
     --steel: #5F6673;
     --allow: #2F7D4F;
     --deny: #C2362B;
+    --deny-bg: #FBEDEB;
     --stop: #B7791F;
     --code-bg: #1B1F2A;
     --code-fg: #E8EAE3;
+    --on-ink: #F6F7F4;
     --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
     --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #E6E8E3;
+      --paper: #161A22;
+      --surface: #1F2430;
+      --rule: #2F3543;
+      --steel: #9AA3B2;
+      --allow: #62C08A;
+      --deny: #F07A6E;
+      --deny-bg: #3A2224;
+      --stop: #E3A94E;
+      --code-bg: #0E1117;
+      --code-fg: #E3E6DF;
+      --on-ink: #161A22;
+    }
+  }
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
-  body {
-    margin: 0; background: var(--paper); color: var(--ink);
-    font: 400 1.0625rem/1.6 var(--sans);
-  }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 400 1.0625rem/1.6 var(--sans); }
   a { color: var(--ink); text-underline-offset: 3px; }
   a:hover { color: var(--allow); }
   :focus-visible { outline: 3px solid var(--stop); outline-offset: 3px; border-radius: 2px; }
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
   .prose { max-width: 66ch; }
+  .muted { color: var(--steel); }
 
   /* Header */
   header.site { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 0; }
   .mark { font: 700 1.25rem var(--mono); text-decoration: none; letter-spacing: -0.01em; }
   .mark span { color: var(--deny); }
   nav.site { display: flex; gap: 20px; align-items: center; font-size: 0.95rem; }
-  .btn {
-    display: inline-block; font: 600 0.95rem var(--sans); text-decoration: none;
-    background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 6px;
-  }
-  .btn:hover { background: var(--allow); color: #fff; }
+  .btn { display: inline-block; font: 600 0.95rem var(--sans); text-decoration: none; background: var(--ink); color: var(--on-ink);
+         padding: 10px 16px; border-radius: 6px; border: 0; cursor: pointer; }
+  .btn:hover { background: var(--allow); color: var(--on-ink); }
+  .btn.quiet { background: transparent; color: var(--ink); border: 1.5px solid var(--rule); padding: 8px 14px; }
+  .btn.quiet:hover { border-color: var(--ink); color: var(--ink); }
 
   /* Hero */
   .hero { padding: 48px 0 56px; }
@@ -51,41 +86,41 @@
   .lede { font-size: 1.2rem; color: var(--steel); margin: 0 0 40px; max-width: 54ch; }
 
   .demo { border-top: 2px solid var(--ink); padding-top: 22px; }
-  .demo-cmd { font: 500 0.95rem var(--mono); color: var(--steel); margin: 0 0 18px; }
-  .who { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 26px; border: 0; padding: 0; }
-  .who legend { font-weight: 600; margin-right: 6px; float: left; padding: 6px 0; }
-  .who label { cursor: pointer; }
-  .who input { position: absolute; opacity: 0; pointer-events: none; }
-  .who span {
-    display: inline-block; font: 500 0.95rem var(--mono); padding: 6px 12px;
-    border: 1.5px solid var(--rule); border-radius: 999px; background: #fff;
-  }
-  .who input:checked + span { border-color: var(--ink); background: var(--ink); color: var(--paper); }
-  .who input:focus-visible + span { outline: 3px solid var(--stop); outline-offset: 2px; }
+  .demo-cmd { font: 500 0.95rem var(--mono); color: var(--steel); margin: 0 0 18px; overflow-wrap: anywhere; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; border: 0; padding: 0; align-items: center; }
+  .chips legend { font-weight: 600; margin-right: 6px; float: left; padding: 6px 0; }
+  .chips label { cursor: pointer; }
+  .chips input { position: absolute; opacity: 0; pointer-events: none; }
+  .chips span { display: inline-block; font: 500 0.95rem var(--mono); padding: 6px 12px; border: 1.5px solid var(--rule); border-radius: 999px; background: var(--surface); }
+  .chips input:checked + span { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+  .chips input:focus-visible + span { outline: 3px solid var(--stop); outline-offset: 2px; }
 
   /* The path as a staircase: one folder per step, deeper as you go */
   .path { list-style: none; margin: 0; padding: 0; font-family: var(--mono); border-top: 1px solid var(--rule); }
-  .step { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; gap: 6px 22px;
-          padding: 8px 0; border-bottom: 1px solid var(--rule); }
+  .step { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; gap: 6px 22px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
   .step .name { font-weight: 700; font-size: clamp(1.35rem, 3.4vw, 2.3rem); line-height: 1.15; letter-spacing: -0.02em;
                 padding-left: calc(var(--depth) * clamp(0.9rem, 2.6vw, 2rem)); overflow-wrap: anywhere; }
+  .path.small .step .name { font-size: clamp(1.1rem, 2.4vw, 1.6rem); padding-left: calc(var(--depth) * clamp(0.7rem, 1.8vw, 1.4rem)); }
   .step .meta { font-size: 0.85rem; color: var(--steel); white-space: nowrap; }
   .step .state { font: 600 0.85rem var(--sans); min-width: 6.5em; text-align: right; }
   .step.ok .state { color: var(--allow); }
   .step.deny .name, .step.deny .state, .step.deny .meta { color: var(--deny); }
-  .step.deny { background: #FBEDEB; }
+  .step.deny { background: var(--deny-bg); }
   .step.unreached { opacity: 0.32; }
 
-  .verdict { margin-top: 26px; display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; max-width: 78ch; }
+  .verdict { margin-top: 26px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 18px; max-width: 80ch; }
   .verdict dt { font: 700 0.95rem var(--mono); padding-top: 2px; }
   .verdict dd { margin: 0; }
   .verdict .v-ok { color: var(--allow); }
   .verdict .v-deny { color: var(--deny); }
-  .verdict code { font: 500 0.95rem var(--mono); background: #fff; border: 1px solid var(--rule); padding: 2px 6px; border-radius: 4px; }
+  .verdict .v-stop { color: var(--stop); }
+  .verdict ol { margin: 0; padding-left: 1.3rem; }
+  .verdict ol li { margin-bottom: 4px; }
+  .verdict small { color: var(--steel); font-size: 0.88rem; }
   .demo-note { font-size: 0.9rem; color: var(--steel); margin-top: 22px; }
 
   code { font-family: var(--mono); font-size: 0.92em; }
-  p code, li code, td code { background: #fff; border: 1px solid var(--rule); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  p code, li code, td code, dd code { background: var(--surface); border: 1px solid var(--rule); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
   pre code { background: none; border: 0; padding: 0; color: inherit; font-size: inherit; overflow-wrap: normal; }
 
   /* Sections */
@@ -94,12 +129,32 @@
   h3 { font: 600 1.1rem/1.3 var(--sans); margin: 0 0 6px; }
   p { margin: 0 0 14px; }
 
+  /* Playground */
+  .pg-presets { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 18px 0 22px; }
+  .pg-presets .label { font-weight: 600; margin-right: 4px; }
+  .pg-who { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 14px; max-width: 640px; margin-bottom: 14px; }
+  .field label { display: block; font-weight: 600; font-size: 0.92rem; margin-bottom: 4px; }
+  .pg-table th { font-weight: 600; font-size: 0.92rem; }
+  .field .hint { font-size: 0.85rem; color: var(--steel); margin-top: 3px; }
+  input.t { width: 100%; font: 500 0.95rem var(--mono); color: var(--ink); background: var(--surface); border: 1.5px solid var(--rule); border-radius: 6px; padding: 8px 10px; }
+  input.t:focus { border-color: var(--ink); outline: none; }
+  input.t:focus-visible { outline: 3px solid var(--stop); outline-offset: 1px; }
+  input.t[aria-invalid="true"] { border-color: var(--deny); background: var(--deny-bg); }
+  .pg-table { width: 100%; border-collapse: collapse; margin: 10px 0 10px; }
+  .pg-table th { text-align: left; padding: 0 8px 6px 0; }
+  .pg-table td { padding: 4px 8px 4px 0; vertical-align: top; }
+  .pg-table td.n { width: 36%; } .pg-table td.m { width: 22%; } .pg-table td.o, .pg-table td.g { width: 17%; }
+  .pg-table td.x { width: 1%; white-space: nowrap; }
+  .pg-table .depth { font: 500 0.95rem var(--mono); color: var(--steel); display: inline-block; padding: 9px 0; }
+  .rm { font: 600 1.1rem/1 var(--sans); background: none; border: 1.5px solid var(--rule); color: var(--steel); border-radius: 6px; width: 2.3rem; height: 2.35rem; cursor: pointer; }
+  .rm:hover { color: var(--deny); border-color: var(--deny); }
+  .pg-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 28px; }
+  .pg-out { border-top: 2px solid var(--ink); padding-top: 18px; }
+  .err { color: var(--deny); font-size: 0.9rem; margin: 4px 0 0; }
+
   /* Annotated output */
   .annotated { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 28px; margin-top: 26px; align-items: start; }
-  pre.term {
-    margin: 0; background: var(--code-bg); color: var(--code-fg); border-radius: 8px;
-    padding: 20px 22px; overflow-x: auto; font: 400 0.9rem/1.6 var(--mono);
-  }
+  pre.term { margin: 0; background: var(--code-bg); color: var(--code-fg); border-radius: 8px; padding: 20px 22px; overflow-x: auto; font: 400 0.9rem/1.6 var(--mono); }
   .term .g { color: #7BD39A; } .term .r { color: #F08A80; } .term .a { color: #F2C66D; } .term .d { color: #8B93A1; } .term .w { color: #fff; font-weight: 500; }
   .notes { list-style: none; margin: 0; padding: 0; }
   .notes li { padding: 0 0 18px 16px; border-left: 3px solid var(--rule); margin-bottom: 14px; }
@@ -110,16 +165,10 @@
   /* Install steps: a real sequence */
   ol.steps { list-style: none; counter-reset: s; margin: 26px 0 0; padding: 0; display: grid; gap: 22px; }
   ol.steps > li { counter-increment: s; display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); gap: 14px; }
-  ol.steps > li::before {
-    content: counter(s); font: 700 1rem var(--mono); width: 2.2rem; height: 2.2rem; border-radius: 50%;
-    border: 2px solid var(--ink); display: grid; place-items: center;
-  }
+  ol.steps > li::before { content: counter(s); font: 700 1rem var(--mono); width: 2.2rem; height: 2.2rem; border-radius: 50%; border: 2px solid var(--ink); display: grid; place-items: center; }
   .codebox { position: relative; margin-top: 8px; }
   .codebox pre { margin: 0; background: var(--code-bg); color: var(--code-fg); border-radius: 8px; padding: 14px 92px 14px 18px; overflow-x: auto; font: 400 0.9rem/1.6 var(--mono); }
-  .copy {
-    position: absolute; top: 8px; right: 8px; font: 600 0.8rem var(--sans); cursor: pointer;
-    background: #2C3242; color: var(--code-fg); border: 1px solid #3A4154; border-radius: 5px; padding: 6px 10px;
-  }
+  .copy { position: absolute; top: 8px; right: 8px; font: 600 0.8rem var(--sans); cursor: pointer; background: #2C3242; color: #E8EAE3; border: 1px solid #3A4154; border-radius: 5px; padding: 6px 10px; }
   .copy:hover { background: #3A4154; }
 
   /* Usage table */
@@ -139,22 +188,42 @@
   ol.rules { margin: 22px 0 0; padding-left: 1.4rem; max-width: 66ch; }
   ol.rules li { padding-left: 6px; margin-bottom: 10px; }
   ol.rules li::marker { font: 700 1rem var(--mono); }
-  .callout { margin-top: 22px; padding: 16px 18px; background: #fff; border: 1px solid var(--rule); border-left: 4px solid var(--stop); border-radius: 4px; max-width: 66ch; }
+  .callout { margin-top: 22px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--rule); border-left: 4px solid var(--stop); border-radius: 4px; max-width: 66ch; }
+
+  /* Projects and about */
+  .projects { list-style: none; margin: 24px 0 0; padding: 0; border-top: 2px solid var(--ink); }
+  .projects li { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 8px 28px; padding: 18px 0; border-bottom: 1px solid var(--rule); }
+  .projects .pname { font: 700 1.15rem var(--mono); }
+  .projects .links { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.95rem; margin-top: 6px; }
+  .about { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; margin-top: 18px; }
+  .about dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 18px; align-content: start; }
+  .about dt { font: 700 0.9rem var(--mono); color: var(--steel); padding-top: 2px; }
+  .about dd { margin: 0; }
 
   footer.site { padding: 36px 0 48px; border-top: 1px solid var(--rule); color: var(--steel); font-size: 0.95rem; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
 
   @media (max-width: 760px) {
     nav.site a:not(.btn) { display: none; }
-    .annotated { grid-template-columns: minmax(0, 1fr); }
-    .guards { grid-template-columns: minmax(0, 1fr); }
+    .annotated, .guards, .about { grid-template-columns: minmax(0, 1fr); }
     .guard + .guard { padding-left: 0; border-left: 0; border-top: 1px solid var(--rule); }
     .step { grid-template-columns: minmax(0, 1fr) auto; }
     .step .meta { grid-column: 1; grid-row: 2; padding-left: calc(var(--depth) * 0.9rem); }
     .step .state { grid-column: 2; grid-row: 1; }
-    .verdict { grid-template-columns: 1fr; gap: 2px; }
+    .verdict { grid-template-columns: minmax(0, 1fr); gap: 2px; }
     .verdict dd { margin-bottom: 10px; }
     .usage td:first-child { white-space: normal; overflow-wrap: anywhere; }
     .usage th, .usage td { padding: 10px 8px; }
+    .pg-who { grid-template-columns: minmax(0, 1fr); }
+    .projects li { grid-template-columns: minmax(0, 1fr); }
+    /* Folder editor becomes one card per folder */
+    .pg-table thead { display: none; }
+    .pg-table, .pg-table tbody, .pg-table tr { display: block; width: 100%; }
+    .pg-table tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px 8px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+    .pg-table td { display: block; width: auto !important; padding: 0; }
+    .pg-table td.n { grid-column: 1 / 3; } .pg-table td.x { grid-column: 3; grid-row: 1; }
+    .pg-table td.m { grid-column: 1 / 4; }
+    .pg-table td.o { grid-column: 1; } .pg-table td.g { grid-column: 2 / 4; }
+    .pg-table td::before { content: attr(data-label); display: block; font-size: 0.8rem; font-weight: 600; color: var(--steel); }
   }
   @media (prefers-reduced-motion: no-preference) {
     .step { transition: opacity .25s ease, background-color .25s ease; }
@@ -166,9 +235,9 @@
   <header class="site">
     <a class="mark" href="./">why<span>cant</span></a>
     <nav class="site" aria-label="Main">
+      <a href="#try">Try your path</a>
       <a href="#install">Install</a>
-      <a href="#usage">Usage</a>
-      <a href="https://github.com/Hennashakil/whycant">Source on GitHub</a>
+      <a href="#about">About</a>
       <a class="btn" href="https://github.com/Hennashakil/whycant/releases/latest">Download v1.0</a>
     </nav>
   </header>
@@ -180,23 +249,69 @@
 
       <div class="demo">
         <p class="demo-cmd" id="demo-cmd">$ whycant -u bob /srv/web/team/report.txt</p>
-        <fieldset class="who">
+        <fieldset class="chips">
           <legend>Check as</legend>
           <label><input type="radio" name="who" value="bob" checked><span>bob</span></label>
           <label><input type="radio" name="who" value="carol"><span>carol</span></label>
           <label><input type="radio" name="who" value="alice"><span>alice</span></label>
           <label><input type="radio" name="who" value="root"><span>root</span></label>
         </fieldset>
+        <ol class="path" id="demo-path" aria-hidden="true"></ol>
+        <dl class="verdict" id="demo-verdict" aria-live="polite"></dl>
+        <p class="demo-note">A sample folder. carol is in group devs; alice owns report.txt but its owner bits are empty. <a href="#try">Build your own path</a></p>
+      </div>
+    </section>
 
-        <ol class="path" id="path" aria-hidden="true"></ol>
-        <dl class="verdict" id="verdict" aria-live="polite"></dl>
-        <p class="demo-note">A sample folder for this demo. carol is in group devs; alice owns report.txt but its owner bits are empty.</p>
+    <section class="block" id="try" aria-labelledby="try-title">
+      <h2 id="try-title">Try your own path</h2>
+      <p class="prose">Change any folder, permission, owner or user and the answer updates as you type. Permissions can be numbers (<code>750</code>) or letters (<code>rwxr-x---</code>). Nothing leaves your browser.</p>
+
+      <div class="pg-presets">
+        <span class="label">Start from</span>
+        <button class="btn quiet" type="button" data-preset="web">Website gives 403</button>
+        <button class="btn quiet" type="button" data-preset="owner">Locked out of my own file</button>
+        <button class="btn quiet" type="button" data-preset="docker">Docker socket</button>
+        <button class="btn quiet" type="button" data-preset="shadow">Password file</button>
+      </div>
+
+      <div class="pg-who">
+        <div class="field">
+          <label for="pg-user">User</label>
+          <input class="t" id="pg-user" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="pg-groups">Their groups</label>
+          <input class="t" id="pg-groups" autocomplete="off" spellcheck="false">
+          <p class="hint">Separate with commas, like <code>www-data, devs</code></p>
+        </div>
+      </div>
+      <fieldset class="chips" id="pg-access">
+        <legend>They want to</legend>
+        <label><input type="radio" name="pg-access" value="r"><span>read</span></label>
+        <label><input type="radio" name="pg-access" value="w"><span>write</span></label>
+        <label><input type="radio" name="pg-access" value="x"><span>run</span></label>
+      </fieldset>
+
+      <p class="muted" id="pg-table-help" style="font-size:.95rem;margin:18px 0 0">The path, one folder per row. The last row is the file or folder they want.</p>
+      <table class="pg-table" id="pg-table" aria-describedby="pg-table-help">
+        <thead><tr><th scope="col">Name</th><th scope="col">Permission</th><th scope="col">Owner</th><th scope="col">Group</th><th scope="col"><span style="position:absolute;left:-9999px">Remove</span></th></tr></thead>
+        <tbody id="pg-rows"></tbody>
+      </table>
+      <div class="pg-actions">
+        <button class="btn quiet" type="button" id="pg-add">Add a folder at the end</button>
+        <button class="btn quiet" type="button" id="pg-share">Copy link to this example</button>
+      </div>
+
+      <div class="pg-out">
+        <p class="demo-cmd" id="pg-cmd"></p>
+        <ol class="path small" id="pg-path" aria-hidden="true"></ol>
+        <dl class="verdict" id="pg-verdict" aria-live="polite"></dl>
       </div>
     </section>
 
     <section class="block" aria-labelledby="what-title">
-      <h2 id="what-title">What it tells you</h2>
-      <p class="prose">Real output from whycant. Every run answers the same three questions.</p>
+      <h2 id="what-title">What the real tool tells you</h2>
+      <p class="prose">Output from whycant on a Linux machine. Every run answers the same three questions.</p>
       <div class="annotated">
 <pre class="term" tabindex="0" aria-label="Example output of whycant"><span class="w">$ whycant -u bob team/f</span>
 Can bob (uid 30033) read team/f?
@@ -281,7 +396,49 @@ whycant --version</code></pre><button class="copy" type="button">Copy</button></
         <li>Is the user in its group? Then only the group bits count.</li>
         <li>Otherwise, the bits for everyone else count.</li>
       </ol>
-      <p class="callout">Rule 2 surprises people: if you own a file but the owner bits are empty, Linux never falls back to the group bits. Try <b>alice</b> in the demo above.</p>
+      <p class="callout">Rule 2 surprises people: if you own a file but the owner bits are empty, Linux never falls back to the group bits. Try <b>alice</b> in the demo above, or the “Locked out of my own file” example.</p>
+    </section>
+
+    <section class="block" id="projects" aria-labelledby="projects-title">
+      <h2 id="projects-title">More projects</h2>
+      <ul class="projects">
+        <li>
+          <div class="pname">chmod calculator</div>
+          <div>
+            <p>Type a permission like <code>750</code> or <code>4755</code> and see what each user can do, with red flags for <code>777</code> and setuid. A Flask web app with a JSON API, deployed both natively and as a Docker container.</p>
+            <div class="links">
+              <a href="https://chmod-calculator-59m0.onrender.com">Open the app</a>
+              <a href="https://chmod-calculator-1.onrender.com">Docker version</a>
+              <a href="https://github.com/Hennashakil/chmod-calculator">Source</a>
+            </div>
+            <p class="muted" style="font-size:.9rem;margin-top:8px">Hosted on a free plan: the first visit after a quiet spell can take about a minute to wake up.</p>
+          </div>
+        </li>
+        <li>
+          <div class="pname">network-port-scanner</div>
+          <div>
+            <p>A multi-threaded TCP port scanner, built for SOC reconnaissance practice.</p>
+            <div class="links"><a href="https://github.com/Hennashakil/network-port-scanner">Source</a></div>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <section class="block" id="about" aria-labelledby="about-title">
+      <h2 id="about-title">About me</h2>
+      <div class="about">
+        <div>
+          <p>I’m <b>Henna Shakil</b>, a Computer Science Engineering graduate (2026) from India, moving into cybersecurity.</p>
+          <p>I learn by building: whycant started while I was reading the source code of GNU <code>mkdir</code>. I practise attack and defence in my own isolated lab, and I only test systems I own or have written permission to test.</p>
+        </div>
+        <dl>
+          <dt>Focus</dt><dd>Linux security, network enumeration, governance and risk (ISO 27001, NIST)</dd>
+          <dt>Lab</dt><dd>Kali Linux and Metasploitable on VirtualBox</dd>
+          <dt>Next</dt><dd>CEH certification and bug bounty programs</dd>
+          <dt>Research</dt><dd>Heart disease prediction with DenseNet121, IJEETR Vol. 8 (2026), presented at ICETS’26</dd>
+          <dt>Code</dt><dd><a href="https://github.com/Hennashakil">github.com/Hennashakil</a></dd>
+        </dl>
+      </div>
     </section>
   </main>
 
@@ -293,99 +450,283 @@ whycant --version</code></pre><button class="copy" type="button">Copy</button></
 
 <script>
 (function () {
-  // A sample tree for the demo. Rules match whycant's evaluate().
-  var tree = [
+  "use strict";
+
+  /* ---------- The rules, the same ones whycant.c applies ---------- */
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // "750", "0750", "rwxr-x---" or "drwxr-x---" -> { bits: [7,5,0], dir: true|false|null, text }
+  function parseMode(s) {
+    s = (s || "").trim();
+    if (/^[0-7]{3,4}$/.test(s)) {
+      var d = s.slice(-3).split("").map(Number);
+      return { bits: d, dir: null };
+    }
+    var m = /^([-dlbcps])?([r-][w-][xsS-])([r-][w-][xsS-])([r-][w-][xtT-])$/.exec(s);
+    if (!m) return null;
+    var bits = [m[2], m[3], m[4]].map(function (t) {
+      return (t[0] === "r" ? 4 : 0) | (t[1] === "w" ? 2 : 0) | (/[xst]/.test(t[2]) ? 1 : 0);
+    });
+    return { bits: bits, dir: m[1] ? m[1] === "d" : null };
+  }
+
+  function triplet(v) { return (v & 4 ? "r" : "-") + (v & 2 ? "w" : "-") + (v & 1 ? "x" : "-"); }
+  function modeString(p, isDir) { return (isDir ? "d" : "-") + p.bits.map(triplet).join(""); }
+  var BIT = { r: 4, w: 2, x: 1 };
+
+  var EXACT = ["/etc/shadow", "/etc/shadow-", "/etc/gshadow", "/etc/gshadow-", "/etc/sudoers"];
+  var TREES = ["/etc/sudoers.d", "/etc/ssl/private", "/root"];
+  function isSensitive(path) {
+    if (EXACT.indexOf(path) !== -1) return true;
+    for (var i = 0; i < TREES.length; i++) {
+      var t = TREES[i];
+      if (path === t || path.indexOf(t + "/") === 0) return true;
+    }
+    return path.indexOf("/.ssh/") !== -1 || /\/\.ssh$/.test(path) || /^\/etc\/ssh\/ssh_host_.*_key$/.test(path);
+  }
+  var PRIVILEGED = ["sudo", "wheel", "admin", "docker", "lxd", "libvirt", "disk", "kmem", "shadow"];
+
+  // rows: [{ name, mode, owner, group }], first row is "/". Returns steps and a verdict.
+  function walk(user, groups, want, rows) {
+    var steps = [], last = rows.length - 1, path = "";
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i], p = parseMode(row.mode);
+      path = i === 0 ? "/" : (path === "/" ? "/" : path + "/") + row.name;
+      var isLast = i === last, isDir = !isLast ? true : (p.dir === null ? false : p.dir);
+      var need = isLast ? want : "x", cls, have;
+      if (user === "root") { cls = "root"; have = 6 | ((isDir || (p.bits[0] | p.bits[1] | p.bits[2]) & 1) ? 1 : 0); }
+      else if (row.owner === user) { cls = "owner"; have = p.bits[0]; }
+      else if (groups.indexOf(row.group) !== -1) { cls = "group"; have = p.bits[1]; }
+      else { cls = "other"; have = p.bits[2]; }
+      var ok = (have & BIT[need]) !== 0;
+      steps.push({ row: row, p: p, path: path, need: need, cls: cls, have: have, ok: ok, isDir: isDir });
+      if (!ok) break;
+    }
+    return steps;
+  }
+
+  function fixesFor(user, s) {
+    var b = s.need, path = s.path, g = s.row.group;
+    if (isSensitive(path)) return { stop: "This is closed on purpose: it holds passwords, keys or admin rules. Opening it would be a security hole, so whycant suggests no fix." };
+    if (g !== "root" && PRIVILEGED.indexOf(g) !== -1)
+      return { stop: "This is guarded by group " + g + ", and access to it is as good as root. whycant will not suggest joining it." };
+    if (s.cls === "root") return { list: [["chmod u+x " + path, "even root needs one x bit to run a file"]] };
+    if (s.cls === "owner") return { list: [["chmod u+" + b + " " + path, "the owner's own bits"]] };
+    var list = [["setfacl -m u:" + user + ":" + b + " " + path, "only this user"]];
+    if (s.cls === "group") list.push(["chmod g+" + b + " " + path, "every member of group " + g]);
+    else {
+      if (g !== "root") {
+        var groupHas = (s.p.bits[1] & BIT[b]) !== 0;
+        list.push(["usermod -aG " + g + " " + user + (groupHas ? "" : " && chmod g+" + b + " " + path), "every member of the group"]);
+      }
+      list.push(["chmod o+" + b + " " + path, "every user on the system"]);
+    }
+    return { list: list };
+  }
+
+  var VERB = { r: "read", w: "write to", x: "run" };
+
+  function renderPath(el, rows, steps) {
+    var html = "";
+    rows.forEach(function (row, i) {
+      var st = steps[i], state = !st ? "unreached" : st.ok ? "ok" : "deny";
+      var word = !st ? "not reached" : !st.ok ? "stops here" : i === rows.length - 1 ? "allowed" : "passes";
+      var label = i === 0 ? "/" : row.name + (i < rows.length - 1 ? "/" : "");
+      var p = parseMode(row.mode);
+      var meta = (p ? modeString(p, i < rows.length - 1 || p.dir === true) : row.mode) + "  " + row.owner + ":" + row.group;
+      html += '<li class="step ' + state + '" style="--depth:' + i + '"><span class="name">' + esc(label) +
+        '</span><span class="meta">' + esc(meta) + '</span><span class="state">' + word + "</span></li>";
+    });
+    el.innerHTML = html;
+  }
+
+  function renderVerdict(el, user, want, rows, steps) {
+    var lastStep = steps[steps.length - 1], d = "";
+    var target = lastStep.path;
+    if (lastStep.ok && steps.length === rows.length) {
+      var why = lastStep.cls === "root" ? "root ignores the mode bits here." :
+        "as " + lastStep.cls + " they get " + triplet(lastStep.have) + ", which includes " + want + ".";
+      d += '<dt class="v-ok">Allowed</dt><dd>' + esc(user) + " can " + VERB[want] + " <code>" + esc(target) + "</code>: " + esc(why) + "</dd>";
+      el.innerHTML = d;
+      return;
+    }
+    var s = lastStep, atTarget = steps.length === rows.length;
+    var what = atTarget ? VERB[s.need] : "pass through";
+    var reason;
+    if (s.cls === "root") reason = "Even root may only run a file that has at least one x bit.";
+    else if (s.cls === "owner") reason = user + " owns it, and the owner bits are " + triplet(s.have) + ". The owner never falls back to the group or other bits.";
+    else if (s.cls === "group") reason = user + " is in group " + s.row.group + ", and the group bits are " + triplet(s.have) + ". A group member never falls back to the other bits.";
+    else reason = user + " is not the owner and not in group " + s.row.group + ", so the ‘other’ bits apply: " + triplet(s.have) + ".";
+    d += '<dt class="v-deny">Denied</dt><dd>' + esc(user) + " cannot " + what + " <code>" + esc(s.path) + "</code></dd>";
+    d += "<dt>Why</dt><dd>" + esc(reason) + (s.isDir && s.need === "x" ? " <small>(x on a folder means “may pass through”.)</small>" : "") + "</dd>";
+    var f = fixesFor(user, s);
+    if (f.stop) d += '<dt class="v-stop">Stop</dt><dd>' + esc(f.stop) + "</dd>";
+    else d += "<dt>Fix</dt><dd><ol>" + f.list.map(function (x) {
+      return "<li><code>" + esc(x[0]) + "</code> <small>" + esc(x[1]) + "</small></li>";
+    }).join("") + "</ol><small>Narrowest first. Never chmod 777.</small></dd>";
+    el.innerHTML = d;
+  }
+
+  function command(user, want, rows) {
+    var flag = want === "r" ? "" : " -" + want;
+    var path = "/" + rows.slice(1).map(function (r) { return r.name; }).join("/");
+    return "$ whycant -u " + user + flag + " " + path;
+  }
+
+  /* ---------- Hero demo ---------- */
+
+  var demoRows = [
     { name: "",           mode: "drwxr-xr-x", owner: "root",  group: "root" },
     { name: "srv",        mode: "drwxr-xr-x", owner: "root",  group: "root" },
     { name: "web",        mode: "drwxr-xr-x", owner: "root",  group: "root" },
     { name: "team",       mode: "drwxr-x---", owner: "root",  group: "devs" },
     { name: "report.txt", mode: "----r-----", owner: "alice", group: "devs" }
   ];
-  var users = {
-    bob:   { groups: ["bob"] },
-    carol: { groups: ["carol", "devs"] },
-    alice: { groups: ["alice", "devs"] },
-    root:  { groups: ["root"] }
+  var demoGroups = { bob: ["bob"], carol: ["carol", "devs"], alice: ["alice", "devs"], root: ["root"] };
+
+  function renderDemo(user) {
+    var steps = walk(user, demoGroups[user], "r", demoRows);
+    document.getElementById("demo-cmd").textContent = command(user, "r", demoRows);
+    renderPath(document.getElementById("demo-path"), demoRows, steps);
+    renderVerdict(document.getElementById("demo-verdict"), user, "r", demoRows, steps);
+  }
+  document.querySelectorAll('input[name="who"]').forEach(function (el) {
+    el.addEventListener("change", function () { if (el.checked) renderDemo(el.value); });
+  });
+  renderDemo("bob");
+
+  /* ---------- Playground ---------- */
+
+  var PRESETS = {
+    web: { u: "www-data", g: "www-data", a: "r", rows: [
+      ["", "755", "root", "root"], ["var", "755", "root", "root"], ["www", "755", "root", "root"],
+      ["html", "750", "henna", "henna"], ["index.html", "644", "henna", "henna"]] },
+    owner: { u: "henna", g: "henna, devs", a: "r", rows: [
+      ["", "755", "root", "root"], ["home", "755", "root", "root"], ["henna", "750", "henna", "henna"],
+      ["notes.txt", "044", "henna", "devs"]] },
+    docker: { u: "bob", g: "bob", a: "w", rows: [
+      ["", "755", "root", "root"], ["run", "755", "root", "root"], ["docker.sock", "660", "root", "docker"]] },
+    shadow: { u: "henna", g: "henna", a: "r", rows: [
+      ["", "755", "root", "root"], ["etc", "755", "root", "root"], ["shadow", "640", "root", "shadow"]] }
   };
 
-  function classOf(user, node) {
-    if (user === "root") return "root";
-    if (node.owner === user) return "owner";
-    if (users[user].groups.indexOf(node.group) !== -1) return "group";
-    return "other";
-  }
-  function bitsFor(cls, mode) {
-    if (cls === "owner") return mode.slice(1, 4);
-    if (cls === "group") return mode.slice(4, 7);
-    return mode.slice(7, 10);
-  }
-  function pathTo(i) {
-    var p = tree.slice(1, i + 1).map(function (n) { return n.name; }).join("/");
-    return "/" + p;
-  }
-  function esc(s) { return s.replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  var state;
+  var userEl = document.getElementById("pg-user"), groupsEl = document.getElementById("pg-groups");
+  var rowsEl = document.getElementById("pg-rows");
 
-  function run(user) {
-    var steps = [], blocked = -1, last = tree.length - 1;
-    for (var i = 0; i < tree.length; i++) {
-      var node = tree[i], need = i === last ? "r" : "x", cls = classOf(user, node);
-      var have = cls === "root" ? "rwx" : bitsFor(cls, node.mode);
-      var ok = cls === "root" || have.indexOf(need) !== -1;
-      steps.push({ node: node, need: need, cls: cls, have: have, ok: ok });
-      if (!ok) { blocked = i; break; }
-    }
-    return { steps: steps, blocked: blocked };
+  function load(p) {
+    state = { u: p.u, g: p.g, a: p.a, rows: p.rows.map(function (r) { return r.slice(); }) };
+    userEl.value = state.u; groupsEl.value = state.g;
+    document.querySelectorAll('input[name="pg-access"]').forEach(function (el) { el.checked = el.value === state.a; });
+    drawRows();
+    update();
   }
 
-  var pathEl = document.getElementById("path");
-  var verdictEl = document.getElementById("verdict");
-  var cmdEl = document.getElementById("demo-cmd");
-
-  function render(user) {
-    var r = run(user);
-    cmdEl.textContent = "$ whycant -u " + user + " /srv/web/team/report.txt";
+  function drawRows() {
     var html = "";
-    tree.forEach(function (node, i) {
-      var st = r.steps[i], state = !st ? "unreached" : st.ok ? "ok" : "deny";
-      var word = !st ? "not reached" : st.ok ? (i === tree.length - 1 ? "can read" : "passes") : "stops here";
-      var label = i === 0 ? "/" : node.name + (i < tree.length - 1 ? "/" : "");
-      html += '<li class="step ' + state + '" style="--depth:' + i + '"><span class="name">' + esc(label) +
-        '</span><span class="meta">' + esc(node.mode + "  " + node.owner + ":" + node.group) +
-        '</span><span class="state">' + word + "</span></li>";
+    state.rows.forEach(function (r, i) {
+      var nameCell = i === 0
+        ? '<span class="depth">/</span>'
+        : '<input class="t" data-i="' + i + '" data-k="0" value="' + esc(r[0]) + '" aria-label="Name of folder ' + (i + 1) + '" autocomplete="off" spellcheck="false">';
+      html += "<tr>" +
+        '<td class="n" data-label="Name">' + nameCell + "</td>" +
+        '<td class="m" data-label="Permission"><input class="t" data-i="' + i + '" data-k="1" value="' + esc(r[1]) + '" aria-label="Permission of ' + (i === 0 ? "/" : esc(r[0])) + '" autocomplete="off" spellcheck="false"></td>' +
+        '<td class="o" data-label="Owner"><input class="t" data-i="' + i + '" data-k="2" value="' + esc(r[2]) + '" aria-label="Owner" autocomplete="off" spellcheck="false"></td>' +
+        '<td class="g" data-label="Group"><input class="t" data-i="' + i + '" data-k="3" value="' + esc(r[3]) + '" aria-label="Group" autocomplete="off" spellcheck="false"></td>' +
+        '<td class="x" data-label="">' + (i === 0 || state.rows.length <= 2 ? "" :
+          '<button class="rm" type="button" data-rm="' + i + '" aria-label="Remove ' + esc(r[0] || "row") + '" title="Remove">×</button>') + "</td></tr>";
     });
-    pathEl.innerHTML = html;
-
-    var d = "";
-    if (r.blocked === -1) {
-      var why = user === "root" ? "root ignores the mode bits for reading." :
-        user + " is in group devs, so the group bits apply, and they include r.";
-      d += '<dt class="v-ok">Allowed</dt><dd>' + esc(user) + " can read report.txt: " + esc(why) + "</dd>";
-    } else {
-      var s = r.steps[r.blocked], where = pathTo(r.blocked), what = s.need === "x" ? "pass through" : "read";
-      var reason;
-      if (s.cls === "owner") reason = user + " owns it, and the owner bits are empty. The owner never falls back to the group bits.";
-      else if (s.cls === "group") reason = user + " is in group " + s.node.group + ", and the group bits lack " + s.need + ".";
-      else reason = user + " is not the owner and not in group " + s.node.group + ", so the 'other' bits apply, and they lack " + s.need + ".";
-      var fix = s.cls === "owner" ? "chmod u+" + s.need + " " + where : "setfacl -m u:" + user + ":" + s.need + " " + where;
-      d += '<dt class="v-deny">Denied</dt><dd>' + esc(user) + " cannot " + what + " <code>" + esc(where) + "</code></dd>";
-      d += "<dt>Why</dt><dd>" + esc(reason) + "</dd>";
-      d += "<dt>Fix</dt><dd><code>" + esc(fix) + "</code></dd>";
-    }
-    verdictEl.innerHTML = d;
+    rowsEl.innerHTML = html;
   }
 
-  document.querySelectorAll('input[name="who"]').forEach(function (el) {
-    el.addEventListener("change", function () { if (el.checked) render(el.value); });
-  });
-  render("bob");
+  function update() {
+    var user = userEl.value.trim(), groups = groupsEl.value.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+    var problems = [];
+    if (!/^[a-z_][a-z0-9_.-]{0,31}$/i.test(user)) problems.push("User needs a name, like bob or www-data.");
+    rowsEl.querySelectorAll("input").forEach(function (el) {
+      var i = +el.dataset.i, k = +el.dataset.k, v = el.value.trim(), bad = false;
+      if (k === 1) bad = !parseMode(v);
+      else if (k === 0) bad = !v || /\//.test(v) || v === "." || v === "..";
+      else bad = !v || /\s/.test(v);
+      el.setAttribute("aria-invalid", bad ? "true" : "false");
+      if (bad) problems.push(k === 1 ? "Permission “" + v + "” isn’t valid: use 3–4 digits (750) or 9 letters (rwxr-x---)."
+        : k === 0 ? "Each name needs some text and no slash." : "Owner and group need a name.");
+    });
+    var rows = state.rows.map(function (r, i) { return { name: i === 0 ? "" : r[0].trim(), mode: r[1].trim(), owner: r[2].trim(), group: r[3].trim() }; });
+    var out = document.getElementById("pg-verdict"), pathEl = document.getElementById("pg-path"), cmdEl = document.getElementById("pg-cmd");
+    if (problems.length) {
+      cmdEl.textContent = "";
+      pathEl.innerHTML = "";
+      out.innerHTML = '<dt class="v-deny">Fix this</dt><dd>' + esc(problems[0]) + "</dd>";
+      return;
+    }
+    var steps = walk(user, groups, state.a, rows);
+    cmdEl.textContent = command(user, state.a, rows);
+    renderPath(pathEl, rows, steps);
+    renderVerdict(out, user, state.a, rows, steps);
+    try { history.replaceState(null, "", "#try=" + encodeURIComponent(JSON.stringify(state))); } catch (e) {}
+  }
 
+  rowsEl.addEventListener("input", function (e) {
+    var el = e.target; if (!el.dataset || el.dataset.i === undefined) return;
+    state.rows[+el.dataset.i][+el.dataset.k] = el.value;
+    update();
+  });
+  rowsEl.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-rm]"); if (!b) return;
+    state.rows.splice(+b.dataset.rm, 1);
+    drawRows(); update();
+  });
+  userEl.addEventListener("input", function () { state.u = userEl.value; update(); });
+  groupsEl.addEventListener("input", function () { state.g = groupsEl.value; update(); });
+  document.querySelectorAll('input[name="pg-access"]').forEach(function (el) {
+    el.addEventListener("change", function () { if (el.checked) { state.a = el.value; update(); } });
+  });
+  document.getElementById("pg-add").addEventListener("click", function () {
+    if (state.rows.length >= 12) return;
+    var last = state.rows[state.rows.length - 1];
+    state.rows.push(["new-folder", "755", last[2], last[3]]);
+    drawRows(); update();
+    var inputs = rowsEl.querySelectorAll('input[data-k="0"]');
+    if (inputs.length) { inputs[inputs.length - 1].focus(); inputs[inputs.length - 1].select(); }
+  });
+  document.querySelectorAll("[data-preset]").forEach(function (b) {
+    b.addEventListener("click", function () { load(PRESETS[b.dataset.preset]); });
+  });
+  document.getElementById("pg-share").addEventListener("click", function () {
+    var btn = this, url = location.href;
+    function done(m) { btn.textContent = m; setTimeout(function () { btn.textContent = "Copy link to this example"; }, 1800); }
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(url).then(function () { done("Link copied"); }, function () { done("Copy it from the address bar"); });
+    else done("Copy it from the address bar");
+  });
+
+  // Start from a shared link if there is one, otherwise from the web server example
+  function fromHash() {
+    var m = /^#try=(.+)$/.exec(location.hash);
+    if (!m) return null;
+    try {
+      var s = JSON.parse(decodeURIComponent(m[1]));
+      var okRows = Array.isArray(s.rows) && s.rows.length >= 2 && s.rows.length <= 12 && s.rows.every(function (r) {
+        return Array.isArray(r) && r.length === 4 && r.every(function (x) { return typeof x === "string" && x.length <= 64; });
+      });
+      if (!okRows || typeof s.u !== "string" || typeof s.g !== "string" || ["r", "w", "x"].indexOf(s.a) === -1) return null;
+      return { u: s.u.slice(0, 32), g: s.g.slice(0, 200), a: s.a, rows: s.rows };
+    } catch (e) { return null; }
+  }
+  load(fromHash() || PRESETS.web);
+
+  /* ---------- Copy buttons ---------- */
   document.querySelectorAll(".copy").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var text = btn.previousElementSibling.innerText;
       function done(msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = "Copy"; }, 1600); }
-      if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(text).then(function () { done("Copied"); }, function () { done("Select and copy"); });
-      } else { done("Select and copy"); }
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(function () { done("Copied"); }, function () { done("Select and copy"); });
+      else done("Select and copy");
     });
   });
 })();
