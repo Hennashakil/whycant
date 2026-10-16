@@ -1,5 +1,11 @@
 # whycant
 
+[![CI](https://github.com/Hennashakil/whycant/actions/workflows/ci.yml/badge.svg)](https://github.com/Hennashakil/whycant/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/Hennashakil/whycant)](https://github.com/Hennashakil/whycant/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+**Website and live demo:** [hennashakil.github.io/whycant](https://hennashakil.github.io/whycant/)
+
 **"Permission denied" tells you *that* access failed. `whycant` tells you *where*, *why*, and the *safest fix*.**
 
 `whycant` is a small Linux command-line tool written in C. It walks a path one folder at a time, the same way the Linux kernel does, applies the kernel's permission rules at every step, and stops at the first one that blocks access. Then it explains the reason in plain English and suggests the narrowest fix — never `chmod 777`.
@@ -81,9 +87,20 @@ Also handled: symlinks (up to 40, like the kernel), `.` and `..`, trailing slash
 
 ## Testing
 
-- **700 cases** (5 users × 43 paths × read/write/run, plus create checks) compared against the kernel's own answer: **0 mismatches**
-- **0 warnings** with gcc and clang on strict flags
-- **0 memory errors** under AddressSanitizer, UndefinedBehaviorSanitizer and Valgrind
+Every push runs three checks on GitHub Actions:
+
+| Check | What it proves |
+|---|---|
+| Build with gcc and clang, warnings as errors | The code compiles cleanly on both compilers |
+| Kernel comparison (`tests/kernel_check.sh`) | For 5 users × 42 paths × read/write/run, plus create, whycant's answer matches the kernel's own decision: symlinks, loops, `..`, read-only and `noexec` mounts, odd file names |
+| The same comparison under AddressSanitizer and UBSan | No memory errors or undefined behaviour along the way |
+
+Run them yourself:
+
+```bash
+make test                 # quick checks, no root needed
+sudo make kernel-test     # full kernel comparison (creates and removes test users)
+```
 
 ## Limitations
 

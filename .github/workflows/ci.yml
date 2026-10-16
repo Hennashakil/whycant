@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.cc }}, warnings are errors)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build with strict warnings
+        run: make CC=${{ matrix.cc }} CFLAGS="-std=c17 -O2 -Wall -Wextra -Wpedantic -Wformat=2 -Wshadow -Werror"
+      - name: Quick tests
+        run: make test
+
+  kernel:
+    name: Compare with the Linux kernel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build
+        run: make
+      - name: Every verdict must match the kernel
+        run: sudo tests/kernel_check.sh ./whycant
+
+  sanitizers:
+    name: Memory and undefined-behaviour checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build with AddressSanitizer and UBSan
+        run: gcc -std=c17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -o whycant whycant.c
+      - name: Run the kernel comparison under the sanitizers
+        env:
+          ASAN_OPTIONS: exitcode=99
+          UBSAN_OPTIONS: halt_on_error=1:exitcode=98:print_stacktrace=1
+        run: sudo --preserve-env=ASAN_OPTIONS,UBSAN_OPTIONS tests/kernel_check.sh ./whycant
