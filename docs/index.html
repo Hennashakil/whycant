@@ -70,7 +70,11 @@
   .muted { color: var(--steel); }
 
   /* Header */
-  header.site { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 0; }
+  header.site { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0;
+                position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--paper) 92%, transparent);
+                backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+                box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--paper) 92%, transparent); clip-path: inset(0 -100vmax); }
+  html { scroll-padding-top: 84px; }
   .mark { font: 700 1.25rem var(--mono); text-decoration: none; letter-spacing: -0.01em; }
   .mark span { color: var(--deny); }
   nav.site { display: flex; gap: 20px; align-items: center; font-size: 0.95rem; }
@@ -81,9 +85,52 @@
   .btn.quiet:hover { border-color: var(--ink); color: var(--ink); }
 
   /* Hero */
-  .hero { padding: 48px 0 56px; }
-  .hero h1 { font: 600 clamp(2.1rem, 4.6vw, 3.4rem)/1.1 var(--sans); letter-spacing: -0.02em; margin: 0 0 14px; max-width: 18ch; }
-  .lede { font-size: 1.2rem; color: var(--steel); margin: 0 0 40px; max-width: 54ch; }
+  .hero { padding: 40px 0 56px; }
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 44px; align-items: center; }
+  .hero h1 { font: 600 clamp(2.1rem, 4.4vw, 3.3rem)/1.1 var(--sans); letter-spacing: -0.02em; margin: 0 0 16px; max-width: 16ch; }
+  .lede { font-size: 1.2rem; color: var(--steel); margin: 0 0 28px; max-width: 46ch; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn.big { font-size: 1.02rem; padding: 13px 20px; }
+  .ba { display: grid; gap: 14px; }
+  .ba-card { background: var(--code-bg); color: var(--code-fg); border-radius: 10px; padding: 16px 18px; }
+  .ba-card.good { background: var(--surface); color: var(--ink); border: 1.5px solid var(--allow); }
+  .ba-label { font: 600 0.85rem var(--sans); margin: 0 0 8px; opacity: .75; }
+  .ba-term { margin: 0; font: 400 0.92rem/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .ba-term .r { color: #F08A80; font-weight: 700; } .ba-term .d { color: #8B93A1; }
+  .ba-q { margin: 10px 0 0; font-size: 0.95rem; color: #F2C66D; }
+  .ba-list { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 0; }
+  .ba-list dt { font: 700 0.9rem var(--mono); color: var(--allow); padding-top: 1px; }
+  .ba-list dd { margin: 0; }
+  .start { margin-top: 48px; }
+  .start-title { font: 600 1rem var(--sans); margin: 0 0 10px; color: var(--steel); }
+  .start ol { list-style: none; counter-reset: st; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .start li { counter-increment: st; }
+  .start a { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); grid-template-rows: auto auto; gap: 2px 12px; text-decoration: none;
+             padding: 16px; border: 1.5px solid var(--rule); border-radius: 10px; background: var(--surface); height: 100%; }
+  .start a::before { content: counter(st); grid-row: 1 / 3; width: 2.2rem; height: 2.2rem; border-radius: 50%; display: grid; place-items: center;
+                     font: 700 1rem var(--mono); background: var(--ink); color: var(--on-ink); }
+  .start a:hover { border-color: var(--ink); color: var(--ink); }
+  .start a b { font-size: 1.05rem; }
+  .start a span { color: var(--steel); font-size: 0.95rem; line-height: 1.45; }
+
+  /* Basics */
+  section.block.tint { background: var(--surface); border-radius: 14px; padding: 48px 36px; border-top: 0; margin: 8px 0; }
+  .basics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin: 24px 0 30px; }
+  .basics h3 { font-size: 1.12rem; }
+  .basics p { color: var(--ink); }
+  .decoder { border-top: 2px solid var(--ink); padding-top: 16px; }
+  .decoder-title { font-weight: 600; margin: 0 0 12px; }
+  .decoder-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .decoder-row div { display: grid; gap: 2px; }
+  .decoder-row .bits { font: 700 2.2rem/1 var(--mono); letter-spacing: .04em; padding-bottom: 8px; border-bottom: 5px solid var(--ink); margin-bottom: 8px; }
+  .decoder-row div:nth-child(2) .bits { border-color: var(--steel); }
+  .decoder-row div:nth-child(3) .bits { border-color: var(--stop); }
+  .decoder-row span:last-child { color: var(--steel); }
+  .people { font-size: 0.95rem; color: var(--steel); margin: -8px 0 18px; max-width: 70ch; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; font-size: 0.88rem; color: var(--steel); margin: 10px 0 0; }
+  .legend .k { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; }
+  .legend .k.ok { background: var(--allow); } .legend .k.deny { background: var(--deny); } .legend .k.off { background: var(--rule); }
+  img.gif { width: 100%; height: auto; border-radius: 10px; display: block; }
 
   .demo { border-top: 2px solid var(--ink); padding-top: 22px; }
   .demo-cmd { font: 500 0.95rem var(--mono); color: var(--steel); margin: 0 0 18px; overflow-wrap: anywhere; }
@@ -97,15 +144,17 @@
 
   /* The path as a staircase: one folder per step, deeper as you go */
   .path { list-style: none; margin: 0; padding: 0; font-family: var(--mono); border-top: 1px solid var(--rule); }
-  .step { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; gap: 6px 22px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+  .step { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 6px 22px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
   .step .name { font-weight: 700; font-size: clamp(1.35rem, 3.4vw, 2.3rem); line-height: 1.15; letter-spacing: -0.02em;
                 padding-left: calc(var(--depth) * clamp(0.9rem, 2.6vw, 2rem)); overflow-wrap: anywhere; }
   .path.small .step .name { font-size: clamp(1.1rem, 2.4vw, 1.6rem); padding-left: calc(var(--depth) * clamp(0.7rem, 1.8vw, 1.4rem)); }
+  .step .name .plain { display: block; font: 400 0.95rem/1.35 var(--sans); letter-spacing: 0; color: var(--steel); margin-top: 3px; }
+  .step.deny .name .plain { color: var(--deny); font-weight: 600; }
   .step .meta { font-size: 0.85rem; color: var(--steel); white-space: nowrap; }
   .step .state { font: 600 0.85rem var(--sans); min-width: 6.5em; text-align: right; }
   .step.ok .state { color: var(--allow); }
   .step.deny .name, .step.deny .state, .step.deny .meta { color: var(--deny); }
-  .step.deny { background: var(--deny-bg); }
+  .step.deny { background: var(--deny-bg); box-shadow: inset 4px 0 0 var(--deny); }
   .step.unreached { opacity: 0.32; }
 
   .verdict { margin-top: 26px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 18px; max-width: 80ch; }
@@ -232,7 +281,11 @@
 
   @media (max-width: 760px) {
     nav.site a:not(.btn) { display: none; }
-    .annotated, .guards, .about { grid-template-columns: minmax(0, 1fr); }
+    .annotated, .guards, .about, .hero-grid, .basics, .start ol { grid-template-columns: minmax(0, 1fr); }
+    .decoder-row { grid-template-columns: minmax(0, 1fr); }
+    .decoder-row .bits { font-size: 1.7rem; }
+    section.block.tint { padding: 36px 18px; margin: 0 -8px; }
+    .hero h1 { max-width: none; }
     .guard + .guard { padding-left: 0; border-left: 0; border-top: 1px solid var(--rule); }
     .step { grid-template-columns: minmax(0, 1fr) auto; }
     .step .meta { grid-column: 1; grid-row: 2; padding-left: calc(var(--depth) * 0.9rem); }
@@ -258,6 +311,9 @@
   }
   @media (prefers-reduced-motion: no-preference) {
     .step { transition: opacity .25s ease, background-color .25s ease; }
+    @keyframes stepIn { from { opacity: 0; transform: translateX(-10px); } }
+    .path.walk .step { animation: stepIn .32s ease-out both; animation-delay: calc(var(--i) * 140ms); }
+    .path.walk .step.unreached { animation-name: none; }
   }
 </style>
 </head>
@@ -266,8 +322,8 @@
   <header class="site">
     <a class="mark" href="./">why<span>cant</span></a>
     <nav class="site" aria-label="Main">
-      <a href="#try">Try your path</a>
-      <a href="#check">Check a number</a>
+      <a href="#basics">Basics</a>
+      <a href="#demo">Try it</a>
       <a href="#install">Install</a>
       <a href="#about">About</a>
       <a class="btn" id="dl-btn" href="https://github.com/Hennashakil/whycant/releases/latest">Download v1.0</a>
@@ -276,27 +332,96 @@
 
   <main>
     <section class="hero" aria-labelledby="hero-title">
-      <h1 id="hero-title">Find the exact folder that says no.</h1>
-      <p class="lede">“Permission denied” tells you access failed. whycant walks the path the way Linux does and shows where it stops, why, and the narrowest fix.</p>
+      <div class="hero-grid">
+        <div>
+          <h1 id="hero-title">Find out why Linux says “Permission denied”.</h1>
+          <p class="lede">whycant checks every folder on the way to a file, exactly the way Linux does. It tells you which folder is locked, why, and the safest way to open it.</p>
+          <div class="cta">
+            <a class="btn big" href="#demo">See it in your browser</a>
+            <a class="btn quiet big" href="#install">Install it</a>
+          </div>
+        </div>
+        <div class="ba" aria-label="Before and after">
+          <div class="ba-card">
+            <p class="ba-label">Linux tells you</p>
+            <pre class="ba-term"><span class="d">$</span> cat /srv/demo/team/report.txt
+cat: /srv/demo/team/report.txt:
+<span class="r">Permission denied</span></pre>
+            <p class="ba-q">Which folder? Why? What should I change?</p>
+          </div>
+          <div class="ba-card good">
+            <p class="ba-label">whycant tells you</p>
+            <dl class="ba-list">
+              <dt>Where</dt><dd>Blocked at the folder <code>team/</code></dd>
+              <dt>Why</dt><dd>bob isn’t in the <b>devs</b> group</dd>
+              <dt>Fix</dt><dd><code>usermod -aG devs bob</code></dd>
+            </dl>
+          </div>
+        </div>
+      </div>
 
+      <nav class="start" aria-label="Start here">
+        <h2 class="start-title">Start here</h2>
+        <ol>
+          <li><a href="#basics"><b>Learn the basics</b><span>How Linux decides who may open what, in 30 seconds</span></a></li>
+          <li><a href="#demo"><b>Try it in your browser</b><span>No install: pick a person and watch where they get stopped</span></a></li>
+          <li><a href="#install"><b>Install it on Linux</b><span>Three commands, then run <code>whycant</code> anywhere</span></a></li>
+        </ol>
+      </nav>
+    </section>
+
+    <section class="block tint" id="basics" aria-labelledby="basics-title">
+      <h2 id="basics-title">Linux permissions in 30 seconds</h2>
+      <p class="prose">Think of every folder as a door, and every file as a locked drawer behind those doors.</p>
+      <div class="basics">
+        <div>
+          <h3>Every file has an owner and a group</h3>
+          <p><code>report.txt</code> might belong to <b>alice</b> and to the <b>devs</b> group (a team of users).</p>
+        </div>
+        <div>
+          <h3>Linux puts you in one box</h3>
+          <p>You are the <b>owner</b>, a <b>group member</b>, or <b>everyone else</b>. Linux checks in that order and uses only the first box that fits you.</p>
+        </div>
+        <div>
+          <h3>Each box has three switches</h3>
+          <p><b>r</b> read it, <b>w</b> change it, <b>x</b> run it. On a folder, <b>x</b> means you may <b>enter</b> it.</p>
+        </div>
+      </div>
+
+      <div class="decoder" aria-label="How to read rwxr-x---">
+        <p class="decoder-title">How to read <code>rwxr-x---</code></p>
+        <div class="decoder-row">
+          <div><span class="bits">rwx</span><b>Owner</b><span>can read, change and enter</span></div>
+          <div><span class="bits">r-x</span><b>Group</b><span>can read and enter</span></div>
+          <div><span class="bits">---</span><b>Everyone else</b><span>can do nothing</span></div>
+        </div>
+      </div>
+
+      <p class="callout"><b>The key idea:</b> to reach a file, you need <b>x</b> (enter) on <b>every folder</b> on the way. One locked door is enough to get “Permission denied”. whycant walks through the doors one by one and shows you the locked one.</p>
+    </section>
+
+    <section class="block" id="demo" aria-labelledby="demo-title">
+      <h2 id="demo-title">Try it: walk to a file as different people</h2>
+      <p class="prose">This is a sample folder. Pick a person and watch Linux walk the path to <code>report.txt</code>. Green doors open; the red one is where they get stopped.</p>
       <div class="demo">
-        <p class="demo-cmd" id="demo-cmd">$ whycant -u bob /srv/web/team/report.txt</p>
         <fieldset class="chips">
-          <legend>Check as</legend>
+          <legend>Walk as</legend>
           <label><input type="radio" name="who" value="bob" checked><span>bob</span></label>
           <label><input type="radio" name="who" value="carol"><span>carol</span></label>
           <label><input type="radio" name="who" value="alice"><span>alice</span></label>
           <label><input type="radio" name="who" value="root"><span>root</span></label>
         </fieldset>
+        <p class="people">bob is a normal user. carol is in the devs group. alice owns <code>report.txt</code>, but its owner switches are all off. root is the administrator.</p>
+        <p class="demo-cmd" id="demo-cmd">$ whycant -u bob /srv/demo/team/report.txt</p>
         <ol class="path" id="demo-path" aria-hidden="true"></ol>
+        <p class="legend"><span><span class="k ok"></span>door opens</span><span><span class="k deny"></span>stopped here</span><span><span class="k off"></span>never reached</span></p>
         <dl class="verdict" id="demo-verdict" aria-live="polite"></dl>
-        <p class="demo-note">A sample folder. carol is in group devs; alice owns report.txt but its owner bits are empty. <a href="#try">Build your own path</a></p>
       </div>
     </section>
 
     <section class="block" id="try" aria-labelledby="try-title">
-      <h2 id="try-title">Try your own path</h2>
-      <p class="prose">Change any folder, permission, owner or user and the answer updates as you type. Permissions can be numbers (<code>750</code>) or letters (<code>rwxr-x---</code>). Nothing leaves your browser.</p>
+      <h2 id="try-title">Build your own path</h2>
+      <p class="prose">Have a real “Permission denied”? Recreate it here. Start from an example, then change the user, folders or permissions; the answer updates as you type. Permissions can be numbers (<code>750</code>) or letters (<code>rwxr-x---</code>). Nothing leaves your browser.</p>
 
       <div class="pg-presets">
         <span class="label">Start from</span>
@@ -361,33 +486,16 @@
       <div class="api-out" id="ask-out" aria-live="polite"></div>
     </section>
 
-    <section class="block" aria-labelledby="what-title">
-      <h2 id="what-title">What the real tool tells you</h2>
-      <p class="prose">Output from whycant on a Linux machine. Every run answers the same three questions.</p>
+    <section class="block" id="tool" aria-labelledby="what-title">
+      <h2 id="what-title">The real tool, in your terminal</h2>
+      <p class="prose">On Linux, whycant checks real files on your machine. Here it finds the locked folder, a fix is applied, and then it refuses to help open the password file.</p>
       <div class="annotated">
-<pre class="term" tabindex="0" aria-label="Example output of whycant"><span class="w">$ whycant -u bob team/f</span>
-Can bob (uid 30033) read team/f?
-
-  <span class="g">[ ok ]</span>  drwxr-xr-x  root:root  /srv/wtest
-  <span class="r">[DENY]</span>  drwxr-x---  root:devs  /srv/wtest/team
-
-  <span class="a">Why:</span> bob is not the owner and not in group devs,
-       so the 'other' bits apply, and they lack x.
-
-  Narrowest fix first:
-    1) setfacl -m u:bob:x /srv/wtest/team
-       <span class="d"># only this user</span>
-    2) usermod -aG devs bob
-       <span class="d"># every member of the group</span>
-    3) chmod o+x /srv/wtest/team
-       <span class="d"># every user on the system</span>
-  Avoid chmod 777 and chmod -R.
-
-  <span class="r">=&gt; Denied.</span></pre>
+        <img class="gif" src="demo.gif" width="944" height="600" loading="lazy"
+             alt="Terminal recording: bob is blocked at /srv/demo/team, whycant lists the narrowest fixes, bob is added to the devs group and access is allowed, then /etc/shadow gets a Stop instead of a fix.">
         <ul class="notes">
-          <li class="where"><h3>Where</h3>Each folder on the path gets a line. The first <code>[DENY]</code> is the one blocking access.</li>
-          <li class="why"><h3>Why</h3>Which rule Linux applied: owner, group or everyone else, and which bit is missing.</li>
-          <li class="fix"><h3>Fix</h3>Ranked from one user to everyone. It never suggests <code>chmod 777</code>.</li>
+          <li class="where"><h3>Where</h3>Every folder on the path gets a line. The first <code>[DENY]</code> is the locked door.</li>
+          <li class="why"><h3>Why</h3>Which box Linux put you in (owner, group or everyone else) and which switch is off.</li>
+          <li class="fix"><h3>Fix</h3>Ranked from “just this user” to “everyone”. It never suggests <code>chmod 777</code>.</li>
         </ul>
       </div>
     </section>
@@ -445,18 +553,6 @@ whycant --version</code></pre><button class="copy" type="button">Copy</button></
         <div class="guard"><span class="tag">Stop</span><h3>Root-level groups</h3><p>It never suggests joining <code>docker</code>, <code>disk</code>, <code>sudo</code> or similar groups, where membership is as good as root. Raw disks are blocked too.</p></div>
         <div class="guard"><span class="tag">sudo</span><h3>Root only when needed</h3><p>It runs as you. If it can’t see further, it prints the exact <code>sudo</code> command, and under sudo it still checks for you, not for root.</p></div>
       </div>
-    </section>
-
-    <section class="block" aria-labelledby="rules-title">
-      <h2 id="rules-title">How Linux decides</h2>
-      <p class="prose">Every folder on the way needs <code>x</code>, permission to pass through. At the end, you need what you asked for: <code>r</code>, <code>w</code> or <code>x</code>. At each step Linux asks four questions, in order, and the first match wins:</p>
-      <ol class="rules">
-        <li>Is the user root? Then allowed, except running a file with no <code>x</code> bit.</li>
-        <li>Does the user own it? Then only the owner bits count.</li>
-        <li>Is the user in its group? Then only the group bits count.</li>
-        <li>Otherwise, the bits for everyone else count.</li>
-      </ol>
-      <p class="callout">Rule 2 surprises people: if you own a file but the owner bits are empty, Linux never falls back to the group bits. Try <b>alice</b> in the demo above, or the “Locked out of my own file” example.</p>
     </section>
 
     <section class="block" id="projects" aria-labelledby="projects-title">
@@ -590,45 +686,75 @@ whycant --version</code></pre><button class="copy" type="button">Copy</button></
   }
 
   var VERB = { r: "read", w: "write to", x: "run" };
+  var DOIT = { r: "read it", w: "change it", x: "run it" };
 
-  function renderPath(el, rows, steps) {
+  // Who may do this, in plain words, for one folder or file
+  function whoMay(row, p, bit) {
+    var o = p.bits[0] & bit, g = p.bits[1] & bit, e = p.bits[2] & bit;
+    var sameAsOwner = row.group === row.owner;
+    if (e) {
+      var except = [];
+      if (!o) except.push(row.owner === "root" ? "root’s own bits" : row.owner);
+      if (!g && !sameAsOwner) except.push("the " + row.group + " group");
+      return except.length ? "Everyone except " + except.join(" and ") : "Everyone";
+    }
+    var list = [];
+    if (o) list.push(row.owner);
+    if (g && !(sameAsOwner && o)) list.push("the " + row.group + " group");
+    if (!list.length) return "Nobody but root";
+    return "Only " + list.join(" and ");
+  }
+  function plainRow(row, p, isLast, want) {
+    if (!p) return "";
+    var bit = isLast ? BIT[want] : 1;
+    var verb = !isLast || (p.dir === true && want === "x") ? "can enter" : "can " + DOIT[want];
+    return whoMay(row, p, bit) + " " + verb;
+  }
+
+  function renderPath(el, rows, steps, want, animate) {
     var html = "";
+    want = want || "r";
     rows.forEach(function (row, i) {
       var st = steps[i], state = !st ? "unreached" : st.ok ? "ok" : "deny";
       var word = !st ? "not reached" : !st.ok ? "stops here" : i === rows.length - 1 ? "allowed" : "passes";
       var label = i === 0 ? "/" : row.name + (i < rows.length - 1 ? "/" : "");
-      var p = parseMode(row.mode);
-      var meta = (p ? modeString(p, i < rows.length - 1 || p.dir === true) : row.mode) + "  " + row.owner + ":" + row.group;
-      html += '<li class="step ' + state + '" style="--depth:' + i + '"><span class="name">' + esc(label) +
-        '</span><span class="meta">' + esc(meta) + '</span><span class="state">' + word + "</span></li>";
+      var p = parseMode(row.mode), isLast = i === rows.length - 1;
+      var meta = (p ? modeString(p, !isLast || p.dir === true) : row.mode) + "  " + row.owner + ":" + row.group;
+      html += '<li class="step ' + state + '" style="--depth:' + i + ";--i:" + i + '"><span class="name">' + esc(label) +
+        '<span class="plain">' + esc(plainRow(row, p, isLast, want)) + "</span></span>" +
+        '<span class="meta">' + esc(meta) + '</span><span class="state">' + word + "</span></li>";
     });
+    el.classList.remove("walk");
     el.innerHTML = html;
+    if (animate) { void el.offsetWidth; el.classList.add("walk"); }
   }
 
   function renderVerdict(el, user, want, rows, steps) {
     var lastStep = steps[steps.length - 1], d = "";
-    var target = lastStep.path;
-    if (lastStep.ok && steps.length === rows.length) {
-      var why = lastStep.cls === "root" ? "root ignores the mode bits here." :
-        "as " + lastStep.cls + " they get " + triplet(lastStep.have) + ", which includes " + want + ".";
-      d += '<dt class="v-ok">Allowed</dt><dd>' + esc(user) + " can " + VERB[want] + " <code>" + esc(target) + "</code>: " + esc(why) + "</dd>";
+    var atTarget = steps.length === rows.length;
+    var s = lastStep, owner = s.row.owner, group = s.row.group;
+    var verb = !atTarget || (s.isDir && s.need === "x") ? "enter" : DOIT[s.need];
+    if (s.ok && atTarget) {
+      var how = s.cls === "root" ? "root can open almost anything." :
+        s.cls === "owner" ? user + " owns it, and the owner may " + verb + "." :
+        s.cls === "group" ? user + " is in the " + group + " group, and that group may " + verb + "." :
+        user + " counts as “everyone else”, and everyone else may " + verb + ".";
+      d += '<dt class="v-ok">Allowed</dt><dd>' + esc(user) + " can " + VERB[want] + " <code>" + esc(s.path) + "</code>. " + esc(how) + "</dd>";
       el.innerHTML = d;
       return;
     }
-    var s = lastStep, atTarget = steps.length === rows.length;
-    var what = atTarget ? VERB[s.need] : "pass through";
     var reason;
-    if (s.cls === "root") reason = "Even root may only run a file that has at least one x bit.";
-    else if (s.cls === "owner") reason = user + " owns it, and the owner bits are " + triplet(s.have) + ". The owner never falls back to the group or other bits.";
-    else if (s.cls === "group") reason = user + " is in group " + s.row.group + ", and the group bits are " + triplet(s.have) + ". A group member never falls back to the other bits.";
-    else reason = user + " is not the owner and not in group " + s.row.group + ", so the ‘other’ bits apply: " + triplet(s.have) + ".";
-    d += '<dt class="v-deny">Denied</dt><dd>' + esc(user) + " cannot " + what + " <code>" + esc(s.path) + "</code></dd>";
-    d += "<dt>Why</dt><dd>" + esc(reason) + (s.isDir && s.need === "x" ? " <small>(x on a folder means “may pass through”.)</small>" : "") + "</dd>";
+    if (s.cls === "root") reason = "Even root can only run a file that has at least one x (run) switch on.";
+    else if (s.cls === "owner") reason = user + " owns it, but the owner’s own switches don’t allow this. Linux never gives the owner the group’s or everyone else’s rights instead.";
+    else if (s.cls === "group") reason = user + " is in the " + group + " group, but that group may not " + verb + ". Group members never get the “everyone else” rights instead.";
+    else reason = user + " is not the owner (" + owner + ") and not in the " + group + " group, so Linux treats them as “everyone else”, and everyone else may not " + verb + ".";
+    d += '<dt class="v-deny">Blocked</dt><dd>' + esc(user) + " cannot " + (atTarget ? VERB[s.need] : "get past") + " <code>" + esc(s.path) + "</code></dd>";
+    d += "<dt>Why</dt><dd>" + esc(reason) + " <small>(" + esc(user) + "’s switches here: " + triplet(s.have) + ")</small></dd>";
     var f = fixesFor(user, s);
     if (f.stop) d += '<dt class="v-stop">Stop</dt><dd>' + esc(f.stop) + "</dd>";
     else d += "<dt>Fix</dt><dd><ol>" + f.list.map(function (x) {
       return "<li><code>" + esc(x[0]) + "</code> <small>" + esc(x[1]) + "</small></li>";
-    }).join("") + "</ol><small>Narrowest first. Never chmod 777.</small></dd>";
+    }).join("") + "</ol><small>Pick the first one that works for you: it opens the least. Never use chmod 777.</small></dd>";
     el.innerHTML = d;
   }
 
@@ -643,7 +769,7 @@ whycant --version</code></pre><button class="copy" type="button">Copy</button></
   var demoRows = [
     { name: "",           mode: "drwxr-xr-x", owner: "root",  group: "root" },
     { name: "srv",        mode: "drwxr-xr-x", owner: "root",  group: "root" },
-    { name: "web",        mode: "drwxr-xr-x", owner: "root",  group: "root" },
+    { name: "demo",       mode: "drwxr-xr-x", owner: "root",  group: "root" },
     { name: "team",       mode: "drwxr-x---", owner: "root",  group: "devs" },
     { name: "report.txt", mode: "----r-----", owner: "alice", group: "devs" }
   ];
@@ -652,7 +778,7 @@ whycant --version</code></pre><button class="copy" type="button">Copy</button></
   function renderDemo(user) {
     var steps = walk(user, demoGroups[user], "r", demoRows);
     document.getElementById("demo-cmd").textContent = command(user, "r", demoRows);
-    renderPath(document.getElementById("demo-path"), demoRows, steps);
+    renderPath(document.getElementById("demo-path"), demoRows, steps, "r", true);
     renderVerdict(document.getElementById("demo-verdict"), user, "r", demoRows, steps);
   }
   document.querySelectorAll('input[name="who"]').forEach(function (el) {
@@ -727,7 +853,7 @@ whycant --version</code></pre><button class="copy" type="button">Copy</button></
     }
     var steps = walk(user, groups, state.a, rows);
     cmdEl.textContent = command(user, state.a, rows);
-    renderPath(pathEl, rows, steps);
+    renderPath(pathEl, rows, steps, state.a, false);
     renderVerdict(out, user, state.a, rows, steps);
     try { history.replaceState(null, "", "#try=" + encodeURIComponent(JSON.stringify(state))); } catch (e) {}
   }
