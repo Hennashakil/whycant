@@ -1,0 +1,12 @@
+{
+  "name": "whycant-site-tests",
+  "private": true,
+  "description": "Browser tests for the whycant website (docs/)",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "axe-core": "4.11.0"
+  }
+}

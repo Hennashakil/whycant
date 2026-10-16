@@ -4,3 +4,6 @@ whycant
 *.save
 *.deb
 dist/
+tests/site/node_modules/
+tests/site/test-results/
+tests/site/playwright-report/

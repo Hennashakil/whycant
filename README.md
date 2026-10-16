@@ -1,6 +1,7 @@
 # whycant
 
 [![CI](https://github.com/Hennashakil/whycant/actions/workflows/ci.yml/badge.svg)](https://github.com/Hennashakil/whycant/actions/workflows/ci.yml)
+[![Website](https://github.com/Hennashakil/whycant/actions/workflows/site.yml/badge.svg)](https://github.com/Hennashakil/whycant/actions/workflows/site.yml)
 [![Latest release](https://img.shields.io/github/v/release/Hennashakil/whycant)](https://github.com/Hennashakil/whycant/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -152,22 +153,42 @@ Also handled: symlinks (up to 40, like the kernel), `.` and `..`, trailing slash
 
 ## Testing
 
-Every push runs three checks on GitHub Actions:
+Every push runs these checks on GitHub Actions:
 
 | Check | What it proves |
 |---|---|
 | Build with gcc and clang, warnings as errors | The code compiles cleanly on both compilers |
 | Kernel comparison (`tests/kernel_check.sh`) | For 5 users × 49 paths (including ACLs) × read/write/run, plus 13 create cases (800 checks), whycant's answer matches the kernel's own decision: symlinks, loops, `..`, read-only and `noexec` mounts, odd file names |
 | The same comparison under AddressSanitizer and UBSan | No memory errors or undefined behaviour along the way |
+| Website browser tests (`tests/site/site.spec.js`) | On desktop, phone and dark mode: the switches, demo, quiz, playground, copy buttons and live GitHub status all work, with no JavaScript errors and zero [axe](https://github.com/dequelabs/axe-core) accessibility violations |
+| Website engine vs the kernel (`tests/site/engine_check.py`) | The website's rules (`docs/engine.js`) give the kernel's answer for 2000 random paths |
 
 Run them yourself:
 
 ```bash
 make test                 # quick checks, no root needed
 sudo make kernel-test     # full kernel comparison (creates and removes test users)
+
+cd tests/site && npm ci && npx playwright install chromium
+npx playwright test                       # website in a real browser
+sudo env "PATH=$PATH" python3 engine_check.py   # website rules vs the kernel
 ```
 
 Releases are automatic: pushing a tag such as `v1.1` builds the hardened binary and the `.deb` on Ubuntu 22.04, tests them, and publishes them with `SHA256SUMS` ([release.yml](.github/workflows/release.yml)).
+
+## Website
+
+The site in [`docs/`](docs/) is plain HTML, CSS and JavaScript with no build step and no trackers:
+
+| File | What it holds |
+|---|---|
+| `index.html` | The page: learn, try, install |
+| `style.css` | Layout, light and dark mode |
+| `engine.js` | The permission rules, the same ones `whycant.c` applies, with no page code so tests can run them |
+| `app.js` | The interactive parts: switches, demo walk, quiz, playground, live GitHub status, comments |
+| `fonts/` | IBM Plex, self-hosted (SIL Open Font License), so the page makes no requests to Google |
+
+Lighthouse (October 2026): **Performance 99–100, Accessibility 100, Best Practices 100, SEO 100** on mobile and desktop.
 
 ## Limitations
 

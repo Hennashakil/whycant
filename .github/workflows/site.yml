@@ -1,0 +1,47 @@
+name: Website
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: Browser tests (Playwright + axe)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: tests/site
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/site/package-lock.json
+      - name: Install test tools
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run the tests (desktop, phone and dark mode)
+        run: npx playwright test
+      - name: Keep the traces if something failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: tests/site/test-results/
+          retention-days: 7
+
+  engine:
+    name: Website engine vs the Linux kernel
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: 2000 random paths must get the kernel's answer
+        run: sudo env "PATH=$PATH" python3 tests/site/engine_check.py
