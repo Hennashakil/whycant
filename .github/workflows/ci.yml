@@ -10,7 +10,7 @@ permissions:
 jobs:
   build:
     name: Build (${{ matrix.cc }}, warnings are errors)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         cc: [gcc, clang]
@@ -23,7 +23,7 @@ jobs:
 
   kernel:
     name: Compare with the Linux kernel
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - name: Build
@@ -33,7 +33,7 @@ jobs:
 
   sanitizers:
     name: Memory and undefined-behaviour checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - name: Build with AddressSanitizer and UBSan

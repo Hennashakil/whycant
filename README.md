@@ -6,6 +6,8 @@
 
 **Website and live demo:** [hennashakil.github.io/whycant](https://hennashakil.github.io/whycant/)
 
+![whycant demo: bob is denied at /srv/demo/team, the narrowest fixes are listed, after adding bob to group devs access is allowed, and /etc/shadow gets a Stop instead of a fix](docs/demo.gif)
+
 **"Permission denied" tells you *that* access failed. `whycant` tells you *where*, *why*, and the *safest fix*.**
 
 `whycant` is a small Linux command-line tool written in C. It walks a path one folder at a time, the same way the Linux kernel does, applies the kernel's permission rules at every step, and stops at the first one that blocks access. Then it explains the reason in plain English and suggests the narrowest fix — never `chmod 777`.
