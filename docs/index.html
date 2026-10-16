@@ -152,6 +152,34 @@
   .pg-out { border-top: 2px solid var(--ink); padding-top: 18px; }
   .err { color: var(--deny); font-size: 0.9rem; margin: 4px 0 0; }
 
+  /* Live project status (from the GitHub API) */
+  .status { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 26px 0 8px; border-top: 2px solid var(--ink); }
+  .status div { padding: 14px 16px 12px 0; }
+  .status div + div { padding-left: 16px; border-left: 1px solid var(--rule); }
+  .status dt { font-size: 0.85rem; color: var(--steel); font-weight: 600; }
+  .status dd { margin: 2px 0 0; font: 700 1.5rem/1.2 var(--mono); overflow-wrap: anywhere; }
+  .status dd small { display: block; font: 400 0.85rem var(--sans); color: var(--steel); margin-top: 2px; }
+  .lastchange { font-size: 0.95rem; color: var(--steel); margin: 6px 0 0; }
+  .lastchange code { color: var(--ink); }
+  .live-note { font-size: 0.85rem; color: var(--steel); }
+  .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--steel); margin-right: 6px; vertical-align: 1px; }
+  .live-dot.on { background: var(--allow); }
+
+  /* Permission check through the backend API */
+  .ask { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 18px; }
+  .ask input.t { width: 13ch; font-size: 1.3rem; padding: 9px 12px; }
+  .api-out { margin-top: 22px; }
+  .api-mode { font: 700 clamp(1.8rem, 5vw, 3rem)/1 var(--mono); margin: 0 0 6px; letter-spacing: .02em; }
+  .api-mode span { display: inline-block; padding-bottom: 5px; border-bottom: 4px solid var(--ink); margin-right: .16em; }
+  .api-mode span:nth-child(2) { border-color: var(--steel); } .api-mode span:nth-child(3) { border-color: var(--stop); }
+  table.who { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  .who th, .who td { text-align: left; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .who thead th { border-bottom: 2px solid var(--ink); font-weight: 600; }
+  ul.flags { list-style: none; padding: 0; margin: 0 0 12px; max-width: 72ch; }
+  ul.flags li { padding: 8px 12px; margin-bottom: 6px; border-left: 4px solid var(--allow); background: var(--surface); }
+  ul.flags li.danger { border-color: var(--deny); } ul.flags li.warn { border-color: var(--stop); } ul.flags li.info { border-color: var(--steel); }
+  .waking { color: var(--steel); }
+
   /* Annotated output */
   .annotated { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 28px; margin-top: 26px; align-items: start; }
   pre.term { margin: 0; background: var(--code-bg); color: var(--code-fg); border-radius: 8px; padding: 20px 22px; overflow-x: auto; font: 400 0.9rem/1.6 var(--mono); }
@@ -214,6 +242,9 @@
     .usage td:first-child { white-space: normal; overflow-wrap: anywhere; }
     .usage th, .usage td { padding: 10px 8px; }
     .pg-who { grid-template-columns: minmax(0, 1fr); }
+    .status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .status div:nth-child(3) { padding-left: 0; border-left: 0; }
+    .status div:nth-child(n+3) { border-top: 1px solid var(--rule); }
     .projects li { grid-template-columns: minmax(0, 1fr); }
     /* Folder editor becomes one card per folder */
     .pg-table thead { display: none; }
@@ -236,9 +267,10 @@
     <a class="mark" href="./">why<span>cant</span></a>
     <nav class="site" aria-label="Main">
       <a href="#try">Try your path</a>
+      <a href="#check">Check a number</a>
       <a href="#install">Install</a>
       <a href="#about">About</a>
-      <a class="btn" href="https://github.com/Hennashakil/whycant/releases/latest">Download v1.0</a>
+      <a class="btn" id="dl-btn" href="https://github.com/Hennashakil/whycant/releases/latest">Download v1.0</a>
     </nav>
   </header>
 
@@ -309,6 +341,26 @@
       </div>
     </section>
 
+    <section class="block" id="check" aria-labelledby="check-title">
+      <h2 id="check-title">Check a permission number</h2>
+      <p class="prose">Type a mode like <code>750</code>, <code>4755</code> or <code>rw-r--r--</code>. The answer comes live from my <a href="https://github.com/Hennashakil/chmod-calculator">chmod calculator</a> API, a Flask app running on Render.</p>
+      <form class="ask" id="ask" novalidate>
+        <div class="field">
+          <label for="ask-mode">Permission</label>
+          <input class="t" id="ask-mode" value="750" maxlength="12" autocomplete="off" spellcheck="false">
+        </div>
+        <button class="btn" type="submit" id="ask-btn">Explain</button>
+      </form>
+      <div class="pg-presets" style="margin:12px 0 0" id="ask-presets">
+        <span class="label">Try</span>
+        <button class="btn quiet" type="button" data-mode="644">644</button>
+        <button class="btn quiet" type="button" data-mode="777">777</button>
+        <button class="btn quiet" type="button" data-mode="1777">1777</button>
+        <button class="btn quiet" type="button" data-mode="4755">4755</button>
+      </div>
+      <div class="api-out" id="ask-out" aria-live="polite"></div>
+    </section>
+
     <section class="block" aria-labelledby="what-title">
       <h2 id="what-title">What the real tool tells you</h2>
       <p class="prose">Output from whycant on a Linux machine. Every run answers the same three questions.</p>
@@ -342,11 +394,19 @@ Can bob (uid 30033) read team/f?
 
     <section class="block" id="install" aria-labelledby="install-title">
       <h2 id="install-title">Install</h2>
-      <p class="prose">For Linux on x86_64. The checksum step proves the file you downloaded is the one that was published.</p>
+      <p class="live-note"><span class="live-dot" id="live-dot"></span><span id="live-text">Project status from GitHub</span></p>
+      <dl class="status" id="status">
+        <div><dt>Latest version</dt><dd id="st-version">v1.0</dd></div>
+        <div><dt>Released</dt><dd id="st-released">Oct 2026</dd></div>
+        <div><dt>Downloads</dt><dd id="st-downloads">—</dd></div>
+        <div><dt>Stars</dt><dd id="st-stars">—</dd></div>
+      </dl>
+      <p class="lastchange" id="st-last"></p>
+      <p class="prose" style="margin-top:22px">For Linux on x86_64. The checksum step proves the file you downloaded is the one that was published.</p>
       <ol class="steps">
         <li><div><h3>Download the program and its checksum</h3>
-          <div class="codebox"><pre><code>wget https://github.com/Hennashakil/whycant/releases/download/v1.0/whycant-linux-x86_64 \
-     https://github.com/Hennashakil/whycant/releases/download/v1.0/SHA256SUMS</code></pre><button class="copy" type="button">Copy</button></div></div></li>
+          <div class="codebox"><pre><code>wget https://github.com/Hennashakil/whycant/releases/latest/download/whycant-linux-x86_64 \
+     https://github.com/Hennashakil/whycant/releases/latest/download/SHA256SUMS</code></pre><button class="copy" type="button">Copy</button></div></div></li>
         <li><div><h3>Verify it</h3>
           <p>You should see <code>whycant-linux-x86_64: OK</code>. If it says <code>FAILED</code>, delete the file and don’t run it.</p>
           <div class="codebox"><pre><code>sha256sum -c SHA256SUMS</code></pre><button class="copy" type="button">Copy</button></div></div></li>
@@ -719,6 +779,145 @@ whycant --version</code></pre><button class="copy" type="button">Copy</button></
     } catch (e) { return null; }
   }
   load(fromHash() || PRESETS.web);
+
+  /* ---------- Live project status from the GitHub API ---------- */
+
+  var REPO = "Hennashakil/whycant";
+  function ago(iso) {
+    var s = (new Date(iso).getTime() - Date.now()) / 1000, a = Math.abs(s);
+    var rtf = window.Intl && Intl.RelativeTimeFormat ? new Intl.RelativeTimeFormat("en", { numeric: "auto" }) : null;
+    var u = a < 3600 ? ["minute", 60] : a < 86400 ? ["hour", 3600] : a < 2592000 ? ["day", 86400] : ["month", 2592000];
+    return rtf ? rtf.format(Math.round(s / u[1]), u[0]) : new Date(iso).toDateString();
+  }
+  function day(iso) { return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
+  function getJSON(url) {
+    return fetch(url, { headers: { Accept: "application/vnd.github+json" } }).then(function (r) {
+      if (!r.ok) throw new Error("GitHub said " + r.status);
+      return r.json();
+    });
+  }
+  function cacheGet() {
+    try { var c = JSON.parse(localStorage.getItem("whycant-status") || "null"); if (c && Date.now() - c.t < 600000) return c.d; } catch (e) {}
+    return null;
+  }
+  function cacheSet(d) { try { localStorage.setItem("whycant-status", JSON.stringify({ t: Date.now(), d: d })); } catch (e) {} }
+
+  function showStatus(d) {
+    var rel = d.releases.filter(function (r) { return !r.draft; });
+    var latest = rel[0];
+    var downloads = rel.reduce(function (n, r) {
+      return n + (r.assets || []).reduce(function (m, a) { return m + (a.download_count || 0); }, 0);
+    }, 0);
+    if (latest) {
+      document.getElementById("st-version").textContent = latest.tag_name;
+      document.getElementById("st-released").innerHTML = esc(day(latest.published_at)) + "<small>" + esc(ago(latest.published_at)) + "</small>";
+      var btn = document.getElementById("dl-btn");
+      btn.textContent = "Download " + latest.tag_name;
+      btn.href = latest.html_url;
+    }
+    document.getElementById("st-downloads").textContent = downloads.toLocaleString("en-IN");
+    document.getElementById("st-stars").textContent = String(d.repo.stargazers_count);
+    var c = d.commits[0];
+    if (c) {
+      var msg = String(c.commit.message).split("\n")[0].slice(0, 80);
+      document.getElementById("st-last").innerHTML = "Last change " + esc(ago(c.commit.author.date)) +
+        ': <a href="' + esc(c.html_url) + '"><code>' + esc(msg) + "</code></a>";
+    }
+    document.getElementById("live-dot").classList.add("on");
+    document.getElementById("live-text").textContent = "Live from GitHub";
+  }
+
+  (function loadStatus() {
+    var cached = cacheGet();
+    if (cached) { showStatus(cached); return; }
+    var base = "https://api.github.com/repos/" + REPO;
+    Promise.all([getJSON(base), getJSON(base + "/releases?per_page=30"), getJSON(base + "/commits?per_page=1")])
+      .then(function (r) {
+        var d = { repo: { stargazers_count: r[0].stargazers_count }, releases: r[1].map(function (x) {
+          return { tag_name: x.tag_name, published_at: x.published_at, html_url: x.html_url, draft: x.draft,
+                   assets: (x.assets || []).map(function (a) { return { download_count: a.download_count }; }) };
+        }), commits: r[2].slice(0, 1).map(function (x) {
+          return { html_url: x.html_url, commit: { message: x.commit.message, author: { date: x.commit.author.date } } };
+        }) };
+        cacheSet(d); showStatus(d);
+      })
+      .catch(function () {
+        document.getElementById("live-text").textContent = "Couldn’t reach GitHub just now, so these numbers may be out of date.";
+      });
+  })();
+
+  /* ---------- Permission check through my Flask API on Render ---------- */
+
+  var APIS = ["https://chmod-calculator-59m0.onrender.com", "https://chmod-calculator-1.onrender.com"];
+  var MODE_RE = /^([0-7]{3,4}|[-dlbcps]?[r-][w-][xsS-][r-][w-][xsS-][r-][w-][xtT-])$/;
+  var askOut = document.getElementById("ask-out"), askIn = document.getElementById("ask-mode"), askBtn = document.getElementById("ask-btn");
+  var LEVEL = { danger: "Danger", warn: "Careful", info: "Note", ok: "OK" };
+
+  function callApi(i, mode) {
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 75000);
+    return fetch(APIS[i] + "/api/mode/" + encodeURIComponent(mode), ctrl ? { signal: ctrl.signal } : {})
+      .then(function (r) {
+        clearTimeout(timer);
+        return r.json().then(function (j) { return { status: r.status, body: j, server: APIS[i] }; });
+      })
+      .catch(function (e) {
+        clearTimeout(timer);
+        if (i + 1 < APIS.length) return callApi(i + 1, mode);
+        throw e;
+      });
+  }
+
+  function showAnswer(res) {
+    if (res.status === 400) { askOut.innerHTML = '<p class="err" role="alert">' + esc(res.body.error || "Not a permission mode.") + "</p>"; return; }
+    if (res.status !== 200) throw new Error("status " + res.status);
+    var b = res.body, sym = String(b.symbolic);
+    var html = '<p class="api-mode"><span>' + esc(sym.slice(0, 3)) + "</span><span>" + esc(sym.slice(3, 6)) + "</span><span>" + esc(sym.slice(6, 9)) + "</span></p>";
+    html += '<p class="muted" style="font-family:var(--mono)">Octal ' + esc(b.octal) + (b.special && b.special.length ? ", with " + esc(b.special.join(" and ")) : "") + "</p>";
+    html += '<div class="table-scroll"><table class="who"><thead><tr><th scope="col">Who</th><th scope="col">On a file</th><th scope="col">On a folder</th></tr></thead><tbody>';
+    (b.classes || []).forEach(function (c) {
+      html += "<tr><td><b>" + esc(c.who.charAt(0).toUpperCase() + c.who.slice(1)) + "</b> <code>" + esc(c.digit) + "</code></td><td>" +
+        esc((c.file || []).join(", ")) + "</td><td>" + esc((c.folder || []).join(", ")) + "</td></tr>";
+    });
+    html += "</tbody></table></div><ul class=\"flags\">";
+    (b.warnings || []).forEach(function (w) {
+      var lvl = LEVEL[w.level] ? w.level : "info";
+      html += '<li class="' + lvl + '"><b>' + LEVEL[lvl] + "</b> " + esc(w.text) + "</li>";
+    });
+    html += "</ul><p class=\"live-note\">Set it with <code>" + esc(b.chmod_octal) + "</code> or <code>" + esc(b.chmod_symbolic) +
+      "</code>. Answered live by <a href=\"" + esc(res.server) + "/?mode=" + encodeURIComponent(b.octal) + "\">" + esc(res.server.replace("https://", "")) + "</a>.</p>";
+    askOut.innerHTML = html;
+  }
+
+  function ask(mode) {
+    mode = mode.trim();
+    if (!MODE_RE.test(mode)) {
+      askOut.innerHTML = '<p class="err" role="alert">That isn’t a permission. Use 3 or 4 digits (750, 4755) or 9 letters (rwxr-x---).</p>';
+      return;
+    }
+    askBtn.disabled = true; askBtn.textContent = "Asking…";
+    askOut.innerHTML = '<p class="waking">Asking the server…</p>';
+    var slow = setTimeout(function () {
+      askOut.innerHTML = '<p class="waking">Waking up the server. It runs on a free plan and sleeps when nobody uses it, so the first answer can take up to a minute.</p>';
+    }, 2500);
+    callApi(0, mode).then(showAnswer).catch(function () {
+      askOut.innerHTML = '<p class="err" role="alert">The server didn’t answer. Try again in a minute, or open the <a href="' + APIS[0] + '">chmod calculator</a> directly.</p>';
+    }).then(function () { clearTimeout(slow); askBtn.disabled = false; askBtn.textContent = "Explain"; });
+  }
+
+  document.getElementById("ask").addEventListener("submit", function (e) { e.preventDefault(); ask(askIn.value); });
+  document.querySelectorAll("#ask-presets [data-mode]").forEach(function (b) {
+    b.addEventListener("click", function () { askIn.value = b.dataset.mode; ask(b.dataset.mode); });
+  });
+
+  // Wake the server as soon as the section comes into view, so the first answer is quicker.
+  var woke = false;
+  function wake() { if (woke) return; woke = true; APIS.forEach(function (u) { fetch(u + "/healthz", { mode: "no-cors" }).catch(function () {}); }); }
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(function (es, obs) { if (es.some(function (x) { return x.isIntersecting; })) { wake(); obs.disconnect(); } },
+      { rootMargin: "300px" }).observe(document.getElementById("check"));
+  }
+  askIn.addEventListener("focus", wake);
 
   /* ---------- Copy buttons ---------- */
   document.querySelectorAll(".copy").forEach(function (btn) {
