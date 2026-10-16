@@ -28,9 +28,9 @@ deb:
 test: whycant
 	./whycant --version
 	./whycant --help > /dev/null
-	./whycant /etc/hosts > /dev/null
+	./whycant Makefile > /dev/null
 	! ./whycant -u nobody /root/x > /dev/null 2>&1
-	./whycant --json /etc/hosts | grep -q '"result":"allowed"'
+	./whycant --json Makefile | grep -q '"result":"allowed"'
 	@echo "quick tests passed"
 
 # Compare every verdict with the kernel's own decision (needs root)

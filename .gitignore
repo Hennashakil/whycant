@@ -3,3 +3,4 @@ whycant
 *.o
 *.save
 *.deb
+dist/

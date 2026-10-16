@@ -34,6 +34,7 @@ jobs:
         run: make test
       - name: Collect files and checksums
         run: |
+          rm -rf dist
           mkdir dist
           cp whycant dist/whycant-linux-x86_64
           cp whycant_*.deb dist/
