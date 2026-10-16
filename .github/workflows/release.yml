@@ -1,0 +1,66 @@
+name: Release
+
+# Push a tag like v1.1 and this builds, tests and publishes the release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build hardened binary and .deb
+    runs-on: ubuntu-24.04
+    # Build on Ubuntu 22.04's older C library so the binary also runs there
+    # (a binary built on 24.04 needs glibc 2.38 and fails on 22.04).
+    container: ubuntu:22.04
+    steps:
+      - name: Install build tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git gcc make binutils libc6-dev dpkg-dev acl
+      - uses: actions/checkout@v5
+      - name: The tag must match the version in the code
+        run: |
+          code=$(sed -n 's/^#define PROGRAM_VERSION "\(.*\)"$/\1/p' whycant.c)
+          if [ "v$code" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match PROGRAM_VERSION $code" >&2
+            exit 1
+          fi
+      - name: Build the .deb (runs the hardened build)
+        run: packaging/build-deb.sh
+      - name: Test the release binary
+        run: make test
+      - name: Collect files and checksums
+        run: |
+          mkdir dist
+          cp whycant dist/whycant-linux-x86_64
+          cp whycant_*.deb dist/
+          cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish the GitHub release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Create the release and upload the files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "whycant $GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag

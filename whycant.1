@@ -1,0 +1,137 @@
+.TH WHYCANT 1 "October 2026" "whycant 1.1" "User Commands"
+.SH NAME
+whycant \- explain why a user can or cannot access a path
+.SH SYNOPSIS
+.B whycant
+[\fIOPTION\fR]... [\fIPATH\fR]...
+.SH DESCRIPTION
+"Permission denied" says that access failed, but not where or why.
+.B whycant
+walks
+.I PATH
+one component at a time, the way the Linux kernel does, following
+symbolic links, and applies the kernel's permission rules at every step.
+It stops at the first step that would fail, explains the reason in plain
+words, and suggests the narrowest fix.
+.PP
+With no
+.IR PATH ,
+.B whycant
+checks the current directory.
+Under
+.BR sudo (8),
+it checks for the user who ran sudo, not for root; use
+.B "\-u root"
+to check root itself.
+.SH OPTIONS
+.TP
+.BR \-u ", " \-\-user =\fIUSER\fR
+Check for
+.I USER
+(a name or a numeric uid). The default is the caller.
+.TP
+.BR \-r ", " \-\-read
+Check read access. This is the default.
+.TP
+.BR \-w ", " \-\-write
+Check write access.
+.TP
+.BR \-x ", " \-\-exec
+Check execute access; for a directory, search ("pass through") access.
+.TP
+.BR \-c ", " \-\-create
+Check whether
+.I USER
+could create
+.I PATH
+(as with
+.BR mkdir (1)
+or
+.BR touch (1)).
+Cannot be combined with
+.BR \-r ", " \-w " or " \-x .
+.TP
+.B \-\-json
+Print one JSON object per
+.I PATH
+on its own line (JSON Lines), for scripts. Invalid UTF-8 in file names is
+replaced with U+FFFD.
+.TP
+.BR \-h ", " \-\-help
+Display help and exit.
+.TP
+.BR \-V ", " \-\-version
+Output version information and exit.
+.SH HOW ACCESS IS DECIDED
+For every directory on the way the user needs search permission
+.RB ( x ).
+At the end they need what was asked for.
+At each step the first matching rule wins:
+.IP 1. 4
+root may read and write anything and search any directory, but may only
+execute a file that has at least one
+.B x
+bit;
+.IP 2. 4
+the owner gets only the owner bits, even if the group or other bits allow
+more;
+.IP 3. 4
+if the file has a POSIX ACL and its group bits (the ACL mask) are not all
+zero, named user entries, then the owning group and named group entries,
+then "other" decide, each limited by the mask;
+.IP 4. 4
+otherwise a member of the file's group gets only the group bits;
+.IP 5. 4
+everyone else gets the other bits.
+.PP
+Read-only and
+.B noexec
+mounts are reported as blockers that no
+.BR chmod (1)
+can change.
+.SH SAFETY
+.B whycant
+only reads; it never changes a file.
+It refuses to suggest fixes for password, key and admin files (such as
+.IR /etc/shadow ,
+.IR /etc/sudoers ,
+SSH keys and
+.IR /root ),
+for raw disks, and for files guarded by groups whose members are
+effectively root (docker, lxd, libvirt, disk, kmem, sudo, wheel, admin,
+shadow).
+It never suggests joining a user's personal group, and never
+.BR "chmod 777" .
+.SH EXIT STATUS
+.TP
+.B 0
+Access is allowed.
+.TP
+.B 1
+Access is denied.
+.TP
+.B 2
+Trouble: bad usage, an unknown user, or a path that cannot be inspected.
+With several paths, the worst status wins.
+.SH EXAMPLES
+.TP
+.B whycant \-u www\-data /var/www/html/index.html
+Why can't the web server read this page?
+.TP
+.B whycant \-c /opt/myapp
+Could I create this directory?
+.TP
+.B whycant \-\-json \-w notes.txt
+The same answer as JSON.
+.SH LIMITATIONS
+Capabilities other than full root, immutable attributes, SELinux, AppArmor
+and network file system rules (such as NFS root_squash) are not modelled.
+.SH SEE ALSO
+.BR namei (1),
+.BR chmod (1),
+.BR setfacl (1),
+.BR getfacl (1),
+.BR acl (5),
+.BR path_resolution (7)
+.SH AUTHOR
+Henna Shakil. Source and issues: https://github.com/Hennashakil/whycant

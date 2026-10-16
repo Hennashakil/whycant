@@ -20,12 +20,23 @@ jobs:
         run: make CC=${{ matrix.cc }} CFLAGS="-std=c17 -O2 -Wall -Wextra -Wpedantic -Wformat=2 -Wshadow -Werror"
       - name: Quick tests
         run: make test
+      - name: Man page renders without warnings
+        run: |
+          sudo apt-get update && sudo apt-get install -y groff-base
+          out=$(groff -man -Tutf8 -ww -z whycant.1 2>&1)
+          echo "$out"
+          [ -z "$out" ]
+      - name: Debian package builds
+        if: matrix.cc == 'gcc'
+        run: packaging/build-deb.sh && dpkg-deb -I whycant_*.deb
 
   kernel:
     name: Compare with the Linux kernel
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+      - name: Install the ACL tools (for the ACL test cases)
+        run: sudo apt-get update && sudo apt-get install -y acl
       - name: Build
         run: make
       - name: Every verdict must match the kernel
@@ -36,6 +47,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+      - name: Install the ACL tools (for the ACL test cases)
+        run: sudo apt-get update && sudo apt-get install -y acl
       - name: Build with AddressSanitizer and UBSan
         run: gcc -std=c17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -o whycant whycant.c
       - name: Run the kernel comparison under the sanitizers

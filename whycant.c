@@ -11,13 +11,13 @@
    (bad usage, unknown user, a path that cannot be inspected).
 
    Modelled:   owner/group/other classes (first match wins, no fallback),
-               root's override of the mode bits, read-only and noexec
-               mounts, symlinks (40 at most, like the kernel), "." and
-               "..", trailing slashes, and creating a new entry (-c).
-   Not modelled (warned about where detectable): POSIX ACL entries,
-               capabilities other than full root, immutable attributes,
-               SELinux/AppArmor, and network-filesystem rules such as
-               NFS root_squash.
+               POSIX ACLs (named users and groups, and the mask), root's
+               override of the mode bits, read-only and noexec mounts,
+               symlinks (40 at most, like the kernel), "." and "..",
+               trailing slashes, and creating a new entry (-c).
+   Not modelled: capabilities other than full root, immutable
+               attributes, SELinux/AppArmor, and network-filesystem rules
+               such as NFS root_squash.
 
    Run it as root to inspect paths that the caller itself cannot see.
 
@@ -29,6 +29,7 @@
 #include <getopt.h>
 #include <grp.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <pwd.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -41,7 +42,7 @@
 #include <unistd.h>
 
 #define PROGRAM_NAME "whycant"
-#define PROGRAM_VERSION "1.0"
+#define PROGRAM_VERSION "1.1"
 
 /* The kernel gives up with ELOOP after this many symlinks in one lookup.  */
 enum { MAX_SYMLINKS = 40 };
@@ -52,11 +53,13 @@ enum { EXIT_ALLOWED = 0, EXIT_DENIED = 1, EXIT_TROUBLE = 2 };
 enum { P_R = 4, P_W = 2, P_X = 1 };
 
 /* Which set of mode bits the kernel consults for this user.  */
-enum perm_class { CLASS_ROOT, CLASS_OWNER, CLASS_GROUP, CLASS_OTHER };
+enum perm_class { CLASS_ROOT, CLASS_OWNER, CLASS_ACL_USER, CLASS_GROUP,
+                  CLASS_OTHER };
 
 static char const *const class_name[] = {
   [CLASS_ROOT] = "root",
   [CLASS_OWNER] = "owner",
+  [CLASS_ACL_USER] = "named user",
   [CLASS_GROUP] = "group",
   [CLASS_OTHER] = "other",
 };
@@ -80,7 +83,15 @@ struct verdict
   unsigned have;                /* Bits the user's class grants.  */
   unsigned missing;             /* Requested bits that are not granted.  */
   char const *blocker;          /* A reason no chmod can fix, or NULL.  */
+  bool acl;                     /* The decision came from an ACL.  */
+  bool masked;                  /* An ACL entry allowed it, the mask did not.  */
+  unsigned entry_perm;          /* That ACL entry's own bits, before the mask.  */
+  unsigned acl_mask;            /* The ACL mask (7 if there is none).  */
+  char via[160];                /* "user:bob", "group:devs", ... for ACLs.  */
 };
+
+/* --json collects one result per PATH and prints it as one line.  */
+static bool g_json;
 
 /* ANSI colours; left empty unless stdout is a terminal.  */
 static char const *c_ok = "", *c_bad = "", *c_dim = "", *c_bold = "",
@@ -132,7 +143,7 @@ put_escaped (FILE *out, char const *s)
 
 /* Print S as a single shell word that is safe to copy and paste.  */
 static void
-put_shell_word (char const *s)
+fput_shell_word (FILE *out, char const *s)
 {
   bool plain = *s != '\0';
   bool has_control = false;
@@ -146,34 +157,42 @@ put_shell_word (char const *s)
     }
 
   if (plain)
-    fputs (s, stdout);
+    fputs (s, out);
   else if (!has_control)
     {
-      putchar ('\'');
+      putc ('\'', out);
       for (char const *p = s; *p; p++)
         if (*p == '\'')
-          fputs ("'\\''", stdout);
+          fputs ("'\\''", out);
         else
-          putchar (*p);
-      putchar ('\'');
+          putc (*p, out);
+      putc ('\'', out);
     }
   else
     {
       /* Bash/zsh/ksh ANSI-C quoting, the only portable-enough way to
          spell a newline inside a single word.  */
-      fputs ("$'", stdout);
+      fputs ("$'", out);
       for (unsigned char const *p = (unsigned char const *) s; *p; p++)
         {
           if (*p == '\'' || *p == '\\')
-            printf ("\\%c", *p);
+            fprintf (out, "\\%c", *p);
           else if (is_control (*p))
-            printf ("\\%03o", *p);
+            fprintf (out, "\\%03o", *p);
           else
-            putchar (*p);
+            putc (*p, out);
         }
-      putchar ('\'');
+      putc ('\'', out);
     }
 }
+
+static void
+put_shell_word (char const *s)
+{
+  fput_shell_word (stdout, s);
+}
+
+static char *g_last_error;      /* For --json: the last error message.  */
 
 static void
 warn_path (char const *what, char const *path, int err, char const *hint)
@@ -181,6 +200,10 @@ warn_path (char const *what, char const *path, int err, char const *hint)
   fprintf (stderr, "%s: %s '", PROGRAM_NAME, what);
   put_escaped (stderr, path);
   fprintf (stderr, "': %s%s\n", strerror (err), hint ? hint : "");
+  free (g_last_error);
+  g_last_error = NULL;
+  if (asprintf (&g_last_error, "%s '%s': %s", what, path, strerror (err)) < 0)
+    g_last_error = NULL;
 }
 
 /* ---------------------------------------------------------------------
@@ -395,6 +418,48 @@ user_in_group (struct user const *u, gid_t gid)
    The permission check itself, mirroring the kernel's generic_permission.
    --------------------------------------------------------------------- */
 
+/* POSIX ACLs, read straight from the "system.posix_acl_access" extended
+   attribute, so no libacl is needed.  Layout (little-endian): a 4-byte
+   version (2), then 8-byte entries { u16 tag; u16 perm; u32 id }.  */
+enum
+{
+  ACL_TAG_USER_OBJ = 0x01, ACL_TAG_USER = 0x02, ACL_TAG_GROUP_OBJ = 0x04,
+  ACL_TAG_GROUP = 0x08, ACL_TAG_MASK = 0x10, ACL_TAG_OTHER = 0x20,
+  ACL_MAX_ENTRIES = 64
+};
+
+struct acl_entry
+{
+  unsigned tag, perm;
+  unsigned long id;
+};
+
+/* Return the number of entries (0 if there is no ACL), or -1 if the ACL
+   exists but cannot be read or understood.  */
+static int
+read_acl (char const *path, struct acl_entry *e, int max)
+{
+  unsigned char buf[4 + 8 * ACL_MAX_ENTRIES];
+  ssize_t n = getxattr (path, "system.posix_acl_access", buf, sizeof buf);
+  if (n < 0)
+    return errno == ENODATA || errno == ENOTSUP ? 0 : -1;
+  if (n < 4 || (n - 4) % 8 != 0
+      || (buf[0] | buf[1] << 8 | buf[2] << 16 | (unsigned) buf[3] << 24) != 2)
+    return -1;
+  int count = (int) ((n - 4) / 8);
+  if (count > max)
+    return -1;
+  for (int i = 0; i < count; i++)
+    {
+      unsigned char const *q = buf + 4 + 8 * i;
+      e[i].tag = (unsigned) (q[0] | q[1] << 8);
+      e[i].perm = (unsigned) (q[2] | q[3] << 8) & 7;
+      e[i].id = (unsigned long) q[4] | (unsigned long) q[5] << 8
+                | (unsigned long) q[6] << 16 | (unsigned long) q[7] << 24;
+    }
+  return count;
+}
+
 static bool
 has_access_acl (char const *path)
 {
@@ -406,6 +471,95 @@ mount_flags (char const *path)
 {
   struct statvfs sv;
   return statvfs (path, &sv) == 0 ? sv.f_flag : 0;
+}
+
+/* The kernel's posix_acl_permission(), for a user who is not the owner.
+   Returns true and fills V when the ACL decides; false means "no usable
+   ACL, use the mode bits".  */
+static bool
+evaluate_acl (char const *path, struct stat const *st, unsigned want,
+              struct user const *u, struct verdict *v)
+{
+  struct acl_entry e[ACL_MAX_ENTRIES];
+  int n = read_acl (path, e, ACL_MAX_ENTRIES);
+  if (n <= 0)
+    return false;
+
+  unsigned mask = 7;
+  bool has_mask = false;
+  for (int i = 0; i < n; i++)
+    if (e[i].tag == ACL_TAG_MASK)
+      {
+        mask = e[i].perm;
+        has_mask = true;
+      }
+
+  v->acl = true;
+  v->acl_mask = mask;
+  bool found = false;
+  unsigned group_union = 0;
+  char name[128];
+  for (int i = 0; i < n; i++)
+    {
+      switch (e[i].tag)
+        {
+        case ACL_TAG_USER:
+          if ((uid_t) e[i].id != u->uid)
+            break;
+          uid_to_name ((uid_t) e[i].id, name, sizeof name);
+          snprintf (v->via, sizeof v->via, "user:%s", name);
+          v->cls = CLASS_ACL_USER;
+          v->entry_perm = e[i].perm;
+          v->have = e[i].perm & mask;
+          v->masked = has_mask && (e[i].perm & want) == want
+                      && (v->have & want) != want;
+          return true;
+
+        case ACL_TAG_GROUP_OBJ:
+        case ACL_TAG_GROUP:
+          {
+            gid_t gid = e[i].tag == ACL_TAG_GROUP_OBJ
+                        ? st->st_gid : (gid_t) e[i].id;
+            if (!user_in_group (u, gid))
+              break;
+            found = true;
+            group_union |= e[i].perm;
+            if ((e[i].perm & want) != want)
+              break;
+            /* The first group entry that allows it decides, after the mask.  */
+            gid_to_name (gid, name, sizeof name);
+            snprintf (v->via, sizeof v->via, "group:%s", name);
+            v->cls = CLASS_GROUP;
+            v->entry_perm = e[i].perm;
+            v->have = e[i].perm & mask;
+            v->masked = has_mask && (v->have & want) != want;
+            return true;
+          }
+
+        case ACL_TAG_OTHER:
+          if (found)
+            {
+              /* In a matching group, but none of those entries allows it:
+                 the kernel denies without looking at "other".  */
+              snprintf (v->via, sizeof v->via, "the user's groups");
+              v->cls = CLASS_GROUP;
+              v->entry_perm = group_union;
+              v->have = group_union & mask;
+              v->masked = false;
+              return true;
+            }
+          snprintf (v->via, sizeof v->via, "other");
+          v->cls = CLASS_OTHER;
+          v->entry_perm = e[i].perm;
+          v->have = e[i].perm;
+          return true;
+
+        default:
+          break;
+        }
+    }
+  v->acl = false;
+  return false;
 }
 
 static struct verdict
@@ -429,6 +583,10 @@ evaluate (char const *path, struct stat const *st, unsigned want,
       v.cls = CLASS_OWNER;
       v.have = (m >> 6) & 7;
     }
+  /* Like the kernel, use the ACL only when the group bits (its mask) are
+     not all zero.  */
+  else if ((m & S_IRWXG) && evaluate_acl (path, st, want, u, &v))
+    ;
   else if (user_in_group (u, st->st_gid))
     {
       v.cls = CLASS_GROUP;
@@ -456,53 +614,159 @@ evaluate (char const *path, struct stat const *st, unsigned want,
    Reporting.
    --------------------------------------------------------------------- */
 
-/* One line of the walk: verdict, mode, owner:group, path, reason.  */
-static void
-report_step (char const *path, struct stat const *st, unsigned want,
-             struct verdict const *v, char const *action)
-{
-  char mode[12], owner[128], group[128], og[260], need[4], got[4];
-  format_mode (st->st_mode, has_access_acl (path), mode);
-  uid_to_name (st->st_uid, owner, sizeof owner);
-  gid_to_name (st->st_gid, group, sizeof group);
-  snprintf (og, sizeof og, "%s:%s", owner, group);
-  bits_to_str (want, need);
+/* ---------------------------------------------------------------------
+   JSON output (--json): one object per PATH, on one line.
+   --------------------------------------------------------------------- */
 
-  printf ("  %s%s%s  %-11s %-16s ", v->ok ? c_ok : c_bad,
-          v->ok ? "[ ok ]" : "[DENY]", c_off, mode, og);
-  put_escaped (stdout, path);
-  printf ("  %s%s needs %s: ", c_dim, action, need);
-  if (v->blocker)
-    fputs (v->blocker, stdout);
-  else if (v->cls == CLASS_ROOT)
-    fputs (v->ok ? "root ignores the mode bits"
-           : "root still needs one x bit", stdout);
-  else
+/* Write S as a JSON string.  File names are bytes, not text: invalid
+   UTF-8 is replaced with U+FFFD so the output always parses.  */
+static void
+json_str (FILE *out, char const *s)
+{
+  putc ('"', out);
+  for (unsigned char const *p = (unsigned char const *) s; *p; )
     {
-      bits_to_triplet (v->have, got);
-      printf ("as %s you get %s", class_name[v->cls], got);
+      unsigned char c = *p;
+      if (c == '"' || c == '\\')
+        fprintf (out, "\\%c", c), p++;
+      else if (c < 0x20 || c == 0x7f)
+        fprintf (out, "\\u%04x", c), p++;
+      else if (c < 0x80)
+        putc (c, out), p++;
+      else
+        {
+          int len = c >= 0xf0 && c <= 0xf4 ? 4 : c >= 0xe0 ? 3 : c >= 0xc2 && c < 0xe0 ? 2 : 0;
+          if (c >= 0xf5)
+            len = 0;
+          bool valid = len > 0;
+          for (int k = 1; valid && k < len; k++)
+            valid = (p[k] & 0xc0) == 0x80;
+          if (valid && len == 3 && ((c == 0xe0 && p[1] < 0xa0) || (c == 0xed && p[1] >= 0xa0)))
+            valid = false;
+          if (valid && len == 4 && ((c == 0xf0 && p[1] < 0x90) || (c == 0xf4 && p[1] >= 0x90)))
+            valid = false;
+          if (valid)
+            {
+              fwrite (p, 1, (size_t) len, out);
+              p += len;
+            }
+          else
+            {
+              fputs ("\\ufffd", out);
+              p++;
+            }
+        }
     }
-  printf ("%s\n", c_off);
+  putc ('"', out);
+}
+
+/* Everything known about one PATH, printed at the end in JSON mode.  */
+static struct
+{
+  FILE *steps;                  /* Comma-separated step objects.  */
+  char *steps_buf;
+  size_t steps_len;
+  int nsteps;
+  char problem[160];            /* e.g. "does not exist".  */
+  char *problem_path;
+  char *sudo_command;
+  char *error;
+  bool has_advice;
+  bool allowed;
+} J;
+
+static void
+json_reset (void)
+{
+  if (J.steps)
+    fclose (J.steps);
+  free (J.steps_buf);
+  free (J.problem_path);
+  free (J.sudo_command);
+  free (J.error);
+  memset (&J, 0, sizeof J);
+  J.steps = open_memstream (&J.steps_buf, &J.steps_len);
+}
+
+static FILE *
+json_step_open (void)
+{
+  if (J.nsteps++)
+    putc (',', J.steps);
+  return J.steps;
+}
+
+/* ---------------------------------------------------------------------
+   Advice: why a step failed and the narrowest fixes.  Built once, then
+   printed for people or as JSON.
+   --------------------------------------------------------------------- */
+
+enum { MAX_FIXES = 4 };
+
+struct advice
+{
+  char why[1024];
+  char note[512];               /* Extra hints: x on folders, ACL details.  */
+  char stop[256];               /* Set when no fix must be suggested.  */
+  char const *blocker_fix;      /* For read-only / noexec mounts.  */
+  int nfix;
+  struct
+  {
+    char *cmd;
+    char scope[128];
+  } fix[MAX_FIXES];
+};
+
+static struct advice g_advice;  /* The advice for the current PATH.  */
+
+static void
+advice_free (struct advice *a)
+{
+  for (int i = 0; i < a->nfix; i++)
+    free (a->fix[i].cmd);
+  memset (a, 0, sizeof *a);
+}
+
+/* Add a fix "WORD1 WORD2 ..." where each word is shell-quoted.  */
+static void
+add_fix (struct advice *a, char const *scope, int nwords, ...)
+{
+  if (a->nfix >= MAX_FIXES)
+    return;
+  char *buf = NULL;
+  size_t len = 0;
+  FILE *f = open_memstream (&buf, &len);
+  if (!f)
+    return;
+  va_list ap;
+  va_start (ap, nwords);
+  for (int i = 0; i < nwords; i++)
+    {
+      char const *w = va_arg (ap, char const *);
+      if (i)
+        putc (' ', f);
+      /* Words starting with '\1' are literal shell syntax such as "&&".  */
+      if (w[0] == '\1')
+        fputs (w + 1, f);
+      else
+        fput_shell_word (f, w);
+    }
+  va_end (ap);
+  if (fclose (f) != 0)
+    {
+      free (buf);
+      return;
+    }
+  a->fix[a->nfix].cmd = buf;
+  snprintf (a->fix[a->nfix].scope, sizeof a->fix[a->nfix].scope, "%s", scope);
+  a->nfix++;
 }
 
 static void
-report_problem (char const *tag, char const *path, char const *what)
+note_add (struct advice *a, char const *text)
 {
-  printf ("  %s%s%s  ", c_bad, tag, c_off);
-  put_escaped (stdout, path);
-  printf ("  %s%s%s\n", c_dim, what, c_off);
-}
-
-static void
-fix_head (int n)
-{
-  printf ("    %d) ", n);
-}
-
-static void
-fix_note (char const *note)
-{
-  printf ("\n       %s# %s%s\n", c_dim, note, c_off);
+  size_t used = strlen (a->note);
+  snprintf (a->note + used, sizeof a->note - used, "%s%s", used ? " " : "", text);
 }
 
 /* Files kept closed on purpose: passwords, keys and admin rules.
@@ -560,148 +824,316 @@ is_privileged_group (char const *name)
   return false;
 }
 
-/* Explain the failed step V on PATH and print the narrowest fixes.  */
+/* Work out why step V on PATH failed and which fixes to suggest.  */
 static void
-suggest_fixes (char const *path, struct stat const *st,
-               struct verdict const *v, struct user const *u)
+build_advice (char const *path, struct stat const *st,
+              struct verdict const *v, struct user const *u, struct advice *a)
 {
-  char bits[4], group[128], spec[300];
+  char bits[4], group[128], owner[128], spec[300];
+  advice_free (a);
   bits_to_str (v->missing, bits);
   gid_to_name (st->st_gid, group, sizeof group);
+  uid_to_name (st->st_uid, owner, sizeof owner);
 
-  printf ("\n  %sWhy:%s ", c_bold, c_off);
   if (v->blocker)
     {
-      printf ("the %s; no chmod can change that.\n", v->blocker);
-      printf ("  %sFix:%s ", c_bold, c_off);
-      if (strstr (v->blocker, "read-only"))
-        puts ("write somewhere else, or remount read-write if that is "
-              "really intended.");
-      else
-        puts ("run it through its interpreter (e.g. sh FILE), or remount "
-              "without noexec if that is really intended.");
+      snprintf (a->why, sizeof a->why, "the %s; no chmod can change that.",
+                v->blocker);
+      a->blocker_fix = strstr (v->blocker, "read-only")
+        ? "write somewhere else, or remount read-write if that is really intended."
+        : "run it through its interpreter (e.g. sh FILE), or remount without noexec if that is really intended.";
       return;
     }
+
+  char entry[4];
+  bits_to_triplet (v->entry_perm, entry);
+  switch (v->cls)
+    {
+    case CLASS_ROOT:
+      snprintf (a->why, sizeof a->why,
+                "even root may only execute a file that has an x bit.");
+      break;
+    case CLASS_OWNER:
+      snprintf (a->why, sizeof a->why,
+                "%s owns this, and the owner bits lack %s. "
+                "The owner never falls back to the group or other bits.",
+                u->name, bits);
+      break;
+    case CLASS_ACL_USER:
+      snprintf (a->why, sizeof a->why,
+                "an ACL entry for %s (%s) decides here, and %s. "
+                "A named user never falls back to the group or other bits.",
+                u->name, v->via,
+                v->masked ? "the ACL mask removes the bits it would allow"
+                          : "it lacks the requested bits");
+      break;
+    case CLASS_GROUP:
+      if (v->acl && v->masked)
+        snprintf (a->why, sizeof a->why,
+                  "the ACL entry %s would allow it, but the ACL mask removes those bits.",
+                  v->via);
+      else if (v->acl)
+        snprintf (a->why, sizeof a->why,
+                  "%s matches group entries in this file's ACL, and none of them allows %s. "
+                  "A group member never falls back to the other bits.",
+                  u->name, bits);
+      else
+        snprintf (a->why, sizeof a->why,
+                  "%s is in group %s, and the group bits lack %s. "
+                  "A group member never falls back to the other bits.",
+                  u->name, group, bits);
+      break;
+    case CLASS_OTHER:
+      snprintf (a->why, sizeof a->why,
+                "%s is not the owner and not in group %s, so the 'other' bits "
+                "apply, and they lack %s.", u->name, group, bits);
+      break;
+    }
+  if (S_ISDIR (st->st_mode) && (v->missing & P_X))
+    note_add (a, "(x on a directory means \"may pass through\"; listing it needs r.)");
+  if (v->acl)
+    note_add (a, "This file has an ACL ('+'); whycant read it like the kernel does.");
+
+  /* Some locks must stay locked: say why, and suggest nothing.  */
+  if (is_sensitive (path))
+    snprintf (a->stop, sizeof a->stop,
+              "closed on purpose (passwords, keys or admin rules)");
+  else if (S_ISBLK (st->st_mode))
+    snprintf (a->stop, sizeof a->stop,
+              "a raw disk; reading it bypasses every file permission");
+  else if (st->st_gid != 0 && is_privileged_group (group))
+    snprintf (a->stop, sizeof a->stop,
+              "guarded by group %s, and access to it is as good as root",
+              group);
+  if (*a->stop)
+    return;
+
+  /* A group named after its owner is that user's personal group:
+     never suggest joining it.  */
+  bool personal_group = strcmp (group, owner) == 0;
 
   switch (v->cls)
     {
     case CLASS_ROOT:
-      puts ("even root may only execute a file that has an x bit.");
+      add_fix (a, "", 3, "chmod", "u+x", path);
       break;
-    case CLASS_OWNER:
-      printf ("%s owns this, and the owner bits lack %s.\n"
-              "       The owner never falls back to the group or other "
-              "bits.\n", u->name, bits);
-      break;
-    case CLASS_GROUP:
-      printf ("%s is in group %s, and the group bits lack %s.\n"
-              "       A group member never falls back to the other "
-              "bits.\n", u->name, group, bits);
-      break;
-    case CLASS_OTHER:
-      printf ("%s is not the owner and not in group %s,\n"
-              "       so the 'other' bits apply, and they lack %s.\n",
-              u->name, group, bits);
-      break;
-    }
-  if (S_ISDIR (st->st_mode) && (v->missing & P_X))
-    puts ("       (x on a directory means \"may pass through\"; "
-          "listing it needs r.)");
-  if (has_access_acl (path) && v->cls != CLASS_ROOT
-      && v->cls != CLASS_OWNER)
-    {
-      fputs ("       This has an ACL ('+'), which can change the answer. "
-             "Check: getfacl ", stdout);
-      put_shell_word (path);
-      putchar ('\n');
-    }
 
-  /* Some locks must stay locked: say why, and suggest nothing.  */
-  char stop[200] = "";
-  if (is_sensitive (path))
-    snprintf (stop, sizeof stop,
-              "closed on purpose (passwords, keys or admin rules)");
-  else if (S_ISBLK (st->st_mode))
-    snprintf (stop, sizeof stop,
-              "a raw disk; reading it bypasses every file permission");
-  else if (st->st_gid != 0 && is_privileged_group (group))
-    snprintf (stop, sizeof stop,
-              "guarded by group %s, and access to it is as good as root",
-              group);
-  if (*stop)
+    case CLASS_OWNER:
+      snprintf (spec, sizeof spec, "u+%s", bits);
+      add_fix (a, "", 3, "chmod", spec, path);
+      break;
+
+    case CLASS_ACL_USER:
+      if (v->masked)
+        {
+          char newmask[4];
+          bits_to_str (v->acl_mask | v->missing, newmask);
+          snprintf (spec, sizeof spec, "m::%s", newmask);
+          add_fix (a, "raise the ACL mask; it also limits the group and every named entry", 4,
+                   "setfacl", "-m", spec, path);
+        }
+      else
+        {
+          char all[4];
+          bits_to_str (v->entry_perm | v->missing, all);
+          snprintf (spec, sizeof spec, "u:%s:%s", u->name, all);
+          add_fix (a, "only this user; replaces their ACL entry", 4,
+                   "setfacl", "-m", spec, path);
+        }
+      break;
+
+    case CLASS_GROUP:
+    case CLASS_OTHER:
+      if (v->masked)
+        {
+          char newmask[4];
+          bits_to_str (v->acl_mask | v->missing, newmask);
+          snprintf (spec, sizeof spec, "m::%s", newmask);
+          add_fix (a, "raise the ACL mask; it also limits the group and every named entry", 4,
+                   "setfacl", "-m", spec, path);
+          break;
+        }
+      snprintf (spec, sizeof spec, "u:%s:%s", u->name, bits);
+      add_fix (a, "only this user; needs the acl package", 4,
+               "setfacl", "-m", spec, path);
+
+      if (v->cls == CLASS_GROUP)
+        {
+          if (!v->acl)
+            {
+              char gspec[16];
+              snprintf (gspec, sizeof gspec, "g+%s", bits);
+              char scope[160];
+              snprintf (scope, sizeof scope, "every member of group %s", group);
+              add_fix (a, scope, 3, "chmod", gspec, path);
+            }
+          break;
+        }
+
+      /* Joining the file's group is reasonable -- unless that group is
+         root's, someone's personal group, or the file has an ACL (where
+         chmod g+ would change the mask instead).  */
+      if (u->has_passwd_entry && st->st_gid != 0 && !personal_group && !v->acl)
+        {
+          unsigned group_bits = (st->st_mode >> 3) & 7;
+          if ((group_bits & v->missing) != v->missing)
+            {
+              char gspec[16];
+              snprintf (gspec, sizeof gspec, "g+%s", bits);
+              add_fix (a, "every member of the group; takes effect at next login",
+                       8, "usermod", "-aG", group, u->name, "\1&&", "chmod", gspec, path);
+            }
+          else
+            add_fix (a, "every member of the group; takes effect at next login",
+                     4, "usermod", "-aG", group, u->name);
+        }
+
+      snprintf (spec, sizeof spec, "o+%s", bits);
+      add_fix (a, "every user on the system -- use only for public content",
+               3, "chmod", spec, path);
+      break;
+    }
+}
+
+/* Print the advice for people.  */
+static void
+print_advice (struct advice const *a)
+{
+  printf ("\n  %sWhy:%s %s\n", c_bold, c_off, a->why);
+  if (*a->note)
+    printf ("       %s\n", a->note);
+  if (a->blocker_fix)
+    {
+      printf ("  %sFix:%s %s\n", c_bold, c_off, a->blocker_fix);
+      return;
+    }
+  if (*a->stop)
     {
       printf ("\n  %sStop:%s this is %s.\n"
               "       Opening it would be a security hole, so no fix is "
               "suggested.\n"
               "       If you really need it once, use sudo for that one "
-              "command.\n", c_bad, c_off, stop);
+              "command.\n", c_bad, c_off, a->stop);
       return;
     }
-
   printf ("\n  %sNarrowest fix first:%s\n", c_bold, c_off);
-  int n = 0;
-  switch (v->cls)
+  for (int i = 0; i < a->nfix; i++)
     {
-    case CLASS_ROOT:
-      fix_head (++n);
-      fputs ("chmod u+x ", stdout);
-      put_shell_word (path);
+      printf ("    %d) %s", i + 1, a->fix[i].cmd);
+      if (*a->fix[i].scope)
+        printf ("\n       %s# %s%s", c_dim, a->fix[i].scope, c_off);
       putchar ('\n');
-      break;
-
-    case CLASS_OWNER:
-      fix_head (++n);
-      printf ("chmod u+%s ", bits);
-      put_shell_word (path);
-      putchar ('\n');
-      break;
-
-    case CLASS_GROUP:
-    case CLASS_OTHER:
-      snprintf (spec, sizeof spec, "u:%s:%s", u->name, bits);
-      fix_head (++n);
-      fputs ("setfacl -m ", stdout);
-      put_shell_word (spec);
-      putchar (' ');
-      put_shell_word (path);
-      fix_note ("only this user; needs the acl package");
-
-      if (v->cls == CLASS_GROUP)
-        {
-          fix_head (++n);
-          printf ("chmod g+%s ", bits);
-          put_shell_word (path);
-          fputs ("\n       ", stdout);
-          printf ("%s# every member of group %s%s\n", c_dim, group, c_off);
-          break;
-        }
-
-      /* Joining the file's group is reasonable -- unless that group is
-         root's, which would grant far more than this one file.  */
-      if (u->has_passwd_entry && st->st_gid != 0)
-        {
-          unsigned group_bits = (st->st_mode >> 3) & 7;
-          fix_head (++n);
-          fputs ("usermod -aG ", stdout);
-          put_shell_word (group);
-          putchar (' ');
-          put_shell_word (u->name);
-          if ((group_bits & v->missing) != v->missing)
-            {
-              printf (" && chmod g+%s ", bits);
-              put_shell_word (path);
-            }
-          fix_note ("every member of the group; takes effect at next login");
-        }
-
-      fix_head (++n);
-      printf ("chmod o+%s ", bits);
-      put_shell_word (path);
-      fix_note ("every user on the system -- use only for public content");
-      break;
     }
   printf ("  %sAvoid chmod 777 and chmod -R: they open far more than this "
           "one step.%s\n", c_dim, c_off);
+}
+
+static void
+suggest_fixes (char const *path, struct stat const *st,
+               struct verdict const *v, struct user const *u)
+{
+  build_advice (path, st, v, u, &g_advice);
+  if (g_json)
+    J.has_advice = true;
+  else
+    print_advice (&g_advice);
+}
+
+/* One line of the walk: verdict, mode, owner:group, path, reason.  */
+static void
+report_step (char const *path, struct stat const *st, unsigned want,
+             struct verdict const *v, char const *action)
+{
+  char mode[12], owner[128], group[128], og[260], need[4], got[4];
+  format_mode (st->st_mode, has_access_acl (path), mode);
+  uid_to_name (st->st_uid, owner, sizeof owner);
+  gid_to_name (st->st_gid, group, sizeof group);
+  bits_to_str (want, need);
+  bits_to_triplet (v->have, got);
+
+  if (g_json)
+    {
+      FILE *f = json_step_open ();
+      fputs ("{\"path\":", f);
+      json_str (f, path);
+      fputs (",\"mode\":", f);
+      json_str (f, mode);
+      fputs (",\"owner\":", f);
+      json_str (f, owner);
+      fputs (",\"group\":", f);
+      json_str (f, group);
+      fprintf (f, ",\"action\":\"%s\",\"needs\":\"%s\",\"class\":\"%s\",\"gets\":\"%s\",\"ok\":%s",
+               action, need, class_name[v->cls], got, v->ok ? "true" : "false");
+      if (v->acl)
+        {
+          fputs (",\"acl_entry\":", f);
+          json_str (f, v->via);
+          fprintf (f, ",\"acl_masked\":%s", v->masked ? "true" : "false");
+        }
+      if (v->blocker)
+        {
+          fputs (",\"blocked_by\":", f);
+          json_str (f, v->blocker);
+        }
+      putc ('}', f);
+      return;
+    }
+
+  snprintf (og, sizeof og, "%s:%s", owner, group);
+  printf ("  %s%s%s  %-11s %-16s ", v->ok ? c_ok : c_bad,
+          v->ok ? "[ ok ]" : "[DENY]", c_off, mode, og);
+  put_escaped (stdout, path);
+  printf ("  %s%s needs %s: ", c_dim, action, need);
+  if (v->blocker)
+    fputs (v->blocker, stdout);
+  else if (v->cls == CLASS_ROOT)
+    fputs (v->ok ? "root ignores the mode bits"
+           : "root still needs one x bit", stdout);
+  else if (v->acl)
+    {
+      printf ("ACL %s gives %s", v->via, got);
+      if (v->masked)
+        fputs (" after the mask", stdout);
+    }
+  else
+    printf ("as %s you get %s", class_name[v->cls], got);
+  printf ("%s\n", c_off);
+}
+
+static void
+report_link (char const *path, char const *target)
+{
+  if (g_json)
+    {
+      FILE *f = json_step_open ();
+      fputs ("{\"link\":", f);
+      json_str (f, path);
+      fputs (",\"target\":", f);
+      json_str (f, target);
+      putc ('}', f);
+      return;
+    }
+  printf ("  %s[link]%s  %-11s %-16s ", c_dim, c_off, "", "");
+  put_escaped (stdout, path);
+  fputs (" -> ", stdout);
+  put_escaped (stdout, target);
+  putchar ('\n');
+}
+
+static void
+report_problem (char const *tag, char const *path, char const *what)
+{
+  if (g_json)
+    {
+      snprintf (J.problem, sizeof J.problem, "%s", what);
+      free (J.problem_path);
+      J.problem_path = strdup (path);
+      (void) tag;
+      return;
+    }
+  printf ("  %s%s%s  ", c_bad, tag, c_off);
+  put_escaped (stdout, path);
+  printf ("  %s%s%s\n", c_dim, what, c_off);
 }
 
 /* "read and write", "execute", ...  */
@@ -734,6 +1166,29 @@ describe_want (unsigned want, bool create, char *buf, size_t size)
 static void
 suggest_sudo (char const *path)
 {
+  if (g_json)
+    {
+      char *buf = NULL;
+      size_t len = 0;
+      FILE *f = open_memstream (&buf, &len);
+      if (f)
+        {
+          fputs ("sudo", f);
+          for (int i = 0; i < g_argc; i++)
+            {
+              putc (' ', f);
+              fput_shell_word (f, g_argv[i]);
+            }
+          if (fclose (f) == 0)
+            J.sudo_command = buf;
+          else
+            free (buf);
+        }
+      snprintf (J.problem, sizeof J.problem, "cannot look inside this without root");
+      free (J.problem_path);
+      J.problem_path = strdup (path);
+      return;
+    }
   printf ("  %s[ROOT]%s  ", c_bad, c_off);
   put_escaped (stdout, path);
   printf ("  %syou cannot look inside this yourself, so whycant "
@@ -751,11 +1206,87 @@ suggest_sudo (char const *path)
 static int
 conclude (bool ok)
 {
+  if (g_json)
+    {
+      J.allowed = ok;
+      return ok ? EXIT_ALLOWED : EXIT_DENIED;
+    }
   if (ok)
     printf ("\n  %s=> Allowed.%s\n", c_ok, c_off);
   else
     printf ("\n  %s=> Denied.%s\n", c_bad, c_off);
   return ok ? EXIT_ALLOWED : EXIT_DENIED;
+}
+
+/* Print the collected JSON object for one PATH.  */
+static void
+json_emit (char const *input, unsigned want, bool create,
+           struct user const *u, int status)
+{
+  if (J.steps)
+    fflush (J.steps);
+  fputs ("{\"user\":", stdout);
+  json_str (stdout, u->name);
+  printf (",\"uid\":%lu,\"path\":", (unsigned long) u->uid);
+  json_str (stdout, input);
+  fputs (",\"access\":", stdout);
+  if (create)
+    fputs ("\"create\"", stdout);
+  else
+    printf ("\"%s%s%s\"", want & P_R ? "r" : "", want & P_W ? "w" : "",
+            want & P_X ? "x" : "");
+  printf (",\"result\":\"%s\"",
+          status == EXIT_ALLOWED ? "allowed" : status == EXIT_DENIED ? "denied" : "error");
+  printf (",\"steps\":[%s]", J.steps_buf ? J.steps_buf : "");
+  if (*J.problem)
+    {
+      fputs (",\"problem\":", stdout);
+      json_str (stdout, J.problem);
+      fputs (",\"problem_path\":", stdout);
+      json_str (stdout, J.problem_path ? J.problem_path : "");
+    }
+  if (J.sudo_command)
+    {
+      fputs (",\"sudo_command\":", stdout);
+      json_str (stdout, J.sudo_command);
+    }
+  if (J.error)
+    {
+      fputs (",\"error\":", stdout);
+      json_str (stdout, J.error);
+    }
+  if (J.has_advice)
+    {
+      struct advice const *a = &g_advice;
+      fputs (",\"why\":", stdout);
+      json_str (stdout, a->why);
+      if (*a->note)
+        {
+          fputs (",\"note\":", stdout);
+          json_str (stdout, a->note);
+        }
+      if (a->blocker_fix)
+        {
+          fputs (",\"fix\":", stdout);
+          json_str (stdout, a->blocker_fix);
+        }
+      if (*a->stop)
+        {
+          fputs (",\"stop\":", stdout);
+          json_str (stdout, a->stop);
+        }
+      fputs (",\"fixes\":[", stdout);
+      for (int i = 0; i < a->nfix; i++)
+        {
+          fputs (i ? ",{\"command\":" : "{\"command\":", stdout);
+          json_str (stdout, a->fix[i].cmd);
+          fputs (",\"scope\":", stdout);
+          json_str (stdout, a->fix[i].scope);
+          putc ('}', stdout);
+        }
+      putc (']', stdout);
+    }
+  fputs ("}\n", stdout);
 }
 
 /* ---------------------------------------------------------------------
@@ -765,7 +1296,8 @@ conclude (bool ok)
 /* Explain whether U can access INPUT with the bits in WANT, or create
    it when CREATE.  Return an exit status.  */
 static int
-explain (char const *input, unsigned want, bool create, struct user const *u)
+explain_walk (char const *input, unsigned want, bool create,
+              struct user const *u)
 {
   /* CUR is always a physical absolute path: symlinks are expanded as
      they are met, which is what makes ".." behave like the kernel's.
@@ -802,12 +1334,15 @@ explain (char const *input, unsigned want, bool create, struct user const *u)
       return EXIT_TROUBLE;
     }
 
-  char action[64];
-  describe_want (want, create, action, sizeof action);
-  printf ("%sCan %s (uid %lu) %s ", c_bold, u->name, (unsigned long) u->uid,
-          action);
-  put_escaped (stdout, input);
-  printf ("?%s\n\n", c_off);
+  if (!g_json)
+    {
+      char action[64];
+      describe_want (want, create, action, sizeof action);
+      printf ("%sCan %s (uid %lu) %s ", c_bold, u->name,
+              (unsigned long) u->uid, action);
+      put_escaped (stdout, input);
+      printf ("?%s\n\n", c_off);
+    }
 
   for (;;)
     {
@@ -930,11 +1465,7 @@ explain (char const *input, unsigned want, bool create, struct user const *u)
             }
           target[n] = '\0';
 
-          printf ("  %s[link]%s  %-11s %-16s ", c_dim, c_off, "", "");
-          put_escaped (stdout, next);
-          fputs (" -> ", stdout);
-          put_escaped (stdout, target);
-          putchar ('\n');
+          report_link (next, target);
 
           /* Splice the target in front of what is left.  A slash after
              the link name ("link/") still demands a directory.  */
@@ -987,6 +1518,22 @@ explain (char const *input, unsigned want, bool create, struct user const *u)
   return conclude (v.ok);
 }
 
+static int
+explain (char const *input, unsigned want, bool create, struct user const *u)
+{
+  if (!g_json)
+    return explain_walk (input, want, create, u);
+  json_reset ();
+  advice_free (&g_advice);
+  free (g_last_error);
+  g_last_error = NULL;
+  int status = explain_walk (input, want, create, u);
+  if (status == EXIT_TROUBLE && g_last_error && !J.error)
+    J.error = strdup (g_last_error);
+  json_emit (input, want, create, u, status);
+  return status;
+}
+
 /* ---------------------------------------------------------------------
    Command line.
    --------------------------------------------------------------------- */
@@ -1012,6 +1559,7 @@ who ran sudo (use -u root to check root itself).\n\
   -w, --write       check write access\n\
   -x, --exec        check execute access (search, for a directory)\n\
   -c, --create      check whether USER could create PATH (mkdir, touch)\n\
+      --json        print one JSON object per PATH, for scripts\n\
   -h, --help        display this help and exit\n\
   -V, --version     output version information and exit\n\
 \n\
@@ -1034,6 +1582,7 @@ main (int argc, char **argv)
     { "write", no_argument, NULL, 'w' },
     { "exec", no_argument, NULL, 'x' },
     { "create", no_argument, NULL, 'c' },
+    { "json", no_argument, NULL, 'J' },
     { "help", no_argument, NULL, 'h' },
     { "version", no_argument, NULL, 'V' },
     { NULL, 0, NULL, 0 }
@@ -1065,6 +1614,9 @@ main (int argc, char **argv)
           break;
         case 'c':
           create = true;
+          break;
+        case 'J':
+          g_json = true;
           break;
         case 'h':
           usage (EXIT_ALLOWED);
@@ -1108,7 +1660,7 @@ main (int argc, char **argv)
   int status = EXIT_ALLOWED;
   for (int i = 0; i < npaths; i++)
     {
-      if (i > 0)
+      if (i > 0 && !g_json)
         putchar ('\n');
       int s = explain (paths[i], want, create, &u);
       if (s > status)
@@ -1116,6 +1668,17 @@ main (int argc, char **argv)
     }
 
   free (u.groups);
+  if (g_json)
+    {
+      json_reset ();
+      if (J.steps)
+        fclose (J.steps);
+      free (J.steps_buf);
+      J.steps = NULL;
+      J.steps_buf = NULL;
+      advice_free (&g_advice);
+    }
+  free (g_last_error);
 
   /* Like coreutils' close_stdout: a full disk or closed pipe must not
      be reported as success.  */

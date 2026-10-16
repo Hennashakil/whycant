@@ -56,6 +56,27 @@ mkdir ro_mnt noexec_mnt
 mount -t tmpfs -o size=1m tmpfs ro_mnt && printf '#!/bin/sh\n' > ro_mnt/s && chmod 755 ro_mnt/s && mount -o remount,ro ro_mnt
 mount -t tmpfs -o size=1m,noexec tmpfs noexec_mnt && printf '#!/bin/sh\n' > noexec_mnt/s && chmod 755 noexec_mnt/s
 
+# --- POSIX ACLs (needs setfacl from the "acl" package)
+acl_paths=(); acl_creates=()
+if command -v setfacl >/dev/null; then
+  # a named user entry: bob may read, everyone else may not
+  echo a > acl_user; chmod 600 acl_user; setfacl -m u:wc_bob:r acl_user
+  # the mask removes write from bob's rw entry
+  echo a > acl_masked; chmod 600 acl_masked; setfacl -m u:wc_bob:rw acl_masked; setfacl -m m::r acl_masked
+  # a named group may enter this folder
+  mkdir acl_dir; chmod 750 acl_dir; setfacl -m g:wc_devs:rx acl_dir; echo a > acl_dir/f; chmod 644 acl_dir/f
+  # in a matching group whose entry lacks r: denied even though "other" may read
+  echo a > acl_found; chown root:wc_devs acl_found; chmod 604 acl_found; setfacl -m g::-,u:wc_carol:rw acl_found
+  # mask of zero: the kernel ignores the ACL and uses the mode bits
+  echo a > acl_mask0; chmod 600 acl_mask0; setfacl -m u:wc_bob:r acl_mask0; chmod 604 acl_mask0
+  # a named user may create files in this folder
+  mkdir acl_create; chmod 755 acl_create; setfacl -m u:wc_bob:rwx acl_create
+  acl_paths=("$T/acl_user" "$T/acl_masked" "$T/acl_dir" "$T/acl_dir/f" "$T/acl_found" "$T/acl_mask0" "$T/acl_create")
+  acl_creates=("$T/acl_create/new" "$T/acl_dir/new")
+else
+  echo "warning: setfacl not found, skipping ACL cases (install the acl package)" >&2
+fi
+
 NL=$'\n'
 paths=(
   / /srv "$T" "$T/pub" "$T/pub/f" "$T/team" "$T/team/f" "$T/ownzero" "$T/ownzero/f"
@@ -65,10 +86,12 @@ paths=(
   "$T/pub/../team/f" "$T/s644" "$T/s744" "$T/ro444" "$T/writable" "$T/sticky"
   "$T/alicedir" "$T/ro_mnt" "$T/ro_mnt/s" "$T/noexec_mnt/s" "$T/we'ird${NL}name"
   "$T//pub///f" pub/f team/f ../whycant-test/team/f . ..
+  "${acl_paths[@]}"
 )
 creates=(
   "$T/pub/new" "$T/writable/new" "$T/sticky/new" "$T/team/new" "$T/alicedir/new"
   "$T/ro_mnt/new" "$T/nothere/new" "$T/pub" "$T/pub/." "$T/dangling" "$T/deep/a/new"
+  "${acl_creates[@]}"
 )
 
 pass=0; fail=0

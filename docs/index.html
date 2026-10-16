@@ -384,7 +384,7 @@
       <a href="#quiz">Quiz</a>
       <a href="#install">Install</a>
       <a href="#about">About</a>
-      <a class="btn" id="dl-btn" href="https://github.com/Hennashakil/whycant/releases/latest">Download v1.0</a>
+      <a class="btn" id="dl-btn" href="https://github.com/Hennashakil/whycant/releases/latest">Download v1.1</a>
     </nav>
   </header>
 
@@ -614,25 +614,30 @@ drwxr-xr-x root root srv
       <h2 id="install-title">Install</h2>
       <p class="live-note"><span class="live-dot" id="live-dot"></span><span id="live-text">Project status from GitHub</span></p>
       <dl class="status" id="status">
-        <div><dt>Latest version</dt><dd id="st-version">v1.0</dd></div>
+        <div><dt>Latest version</dt><dd id="st-version">v1.1</dd></div>
         <div><dt>Released</dt><dd id="st-released">Oct 2026</dd></div>
         <div><dt>Downloads</dt><dd id="st-downloads">—</dd></div>
         <div><dt>Stars</dt><dd id="st-stars">—</dd></div>
       </dl>
       <p class="lastchange" id="st-last"></p>
-      <p class="prose" style="margin-top:22px">For Linux on x86_64. The checksum step proves the file you downloaded is the one that was published.</p>
+      <p class="prose" style="margin-top:22px">For Linux on x86_64 (Ubuntu 22.04 or newer, Debian 12 or newer). The checksum step proves the file you downloaded is the one that was published.</p>
       <ol class="steps">
         <li><div><h3>Download the program and its checksum</h3>
-          <div class="codebox"><pre><code>wget https://github.com/Hennashakil/whycant/releases/latest/download/whycant-linux-x86_64 \
+          <div class="codebox"><pre><code>wget -N https://github.com/Hennashakil/whycant/releases/latest/download/whycant-linux-x86_64 \
      https://github.com/Hennashakil/whycant/releases/latest/download/SHA256SUMS</code></pre><button class="copy" type="button">Copy</button></div></div></li>
         <li><div><h3>Verify it</h3>
           <p>You should see <code>whycant-linux-x86_64: OK</code>. If it says <code>FAILED</code>, delete the file and don’t run it.</p>
-          <div class="codebox"><pre><code>sha256sum -c SHA256SUMS</code></pre><button class="copy" type="button">Copy</button></div></div></li>
+          <div class="codebox"><pre><code>sha256sum -c --ignore-missing SHA256SUMS</code></pre><button class="copy" type="button">Copy</button></div></div></li>
         <li><div><h3>Install it</h3>
           <div class="codebox"><pre><code>chmod +x whycant-linux-x86_64
 sudo mv whycant-linux-x86_64 /usr/local/bin/whycant
 whycant --version</code></pre><button class="copy" type="button">Copy</button></div></div></li>
       </ol>
+      <p class="prose" style="margin-top:22px"><b>On Debian or Ubuntu?</b> Install the package instead. It also adds the manual (<code>man whycant</code>), and <code>sudo apt remove whycant</code> removes it cleanly. If an older copy is in <code>/usr/local/bin</code>, delete it first (<code>sudo rm /usr/local/bin/whycant</code>), because that folder comes first in your PATH.</p>
+      <div class="codebox"><pre><code>wget -N https://github.com/Hennashakil/whycant/releases/download/v1.1/whycant_1.1_amd64.deb \
+     https://github.com/Hennashakil/whycant/releases/latest/download/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS
+sudo apt install ./whycant_1.1_amd64.deb</code></pre><button class="copy" type="button">Copy</button></div>
       <p class="prose" style="margin-top:22px">Prefer to build it yourself? <code>git clone https://github.com/Hennashakil/whycant.git && cd whycant && make && sudo make install</code></p>
     </section>
 
@@ -649,10 +654,11 @@ whycant --version</code></pre><button class="copy" type="button">Copy</button></
             <tr><td>whycant -x ./backup.sh</td><td>Can I run it?</td></tr>
             <tr><td>whycant -c /opt/myapp</td><td>Can I create it here?</td></tr>
             <tr><td>sudo whycant -u www-data /var/www/html</td><td>Can another user reach it?</td></tr>
+            <tr><td>whycant --json -w notes.txt</td><td>The same answer as JSON, for scripts</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="prose" style="margin-top:18px">Exit codes: <code>0</code> allowed, <code>1</code> denied, <code>2</code> error, so scripts can act on the result.</p>
+      <p class="prose" style="margin-top:18px">Exit codes: <code>0</code> allowed, <code>1</code> denied, <code>2</code> error, so scripts can act on the result. Files with a <code>+</code> after their mode have an ACL (extra per-user rules); whycant reads those like the kernel does, including the ACL mask. Full manual: <code>man whycant</code>.</p>
     </section>
 
     <section class="block" aria-labelledby="safety-title">
